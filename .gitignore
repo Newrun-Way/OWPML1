@@ -9,6 +9,8 @@ build/
 
 # 추출 결과물 (용량이 크고 재생성 가능)
 extracted_*/
+python-hwpxlib/extracted_results/
+python-hwplib/extracted_results/
 
 # IDE
 .vscode/

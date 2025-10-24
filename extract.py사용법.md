@@ -18,7 +18,7 @@ HWP든 HWPX든 자동으로 처리
 ### HWPX 파일
 ```
 입력: 파일.hwpx
-출력:
+출력 위치: python-hwpxlib/extracted_results/extracted_파일명/
   - 전체텍스트.txt
   - 표데이터.json (99개 표)
   - 표목록.txt
@@ -30,7 +30,7 @@ HWP든 HWPX든 자동으로 처리
 ### HWP 파일
 ```
 입력: 파일.hwp
-출력:
+출력 위치: python-hwpxlib/extracted_results/extracted_파일명/
   - 전체텍스트.txt (텍스트만)
   - 구조.json
   - 추출요약.txt
