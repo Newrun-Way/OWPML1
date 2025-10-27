@@ -14,7 +14,6 @@ import os
 import sys
 import jpype
 import io
-import subprocess
 from pathlib import Path
 
 # Windows에서 UTF-8 출력을 위한 설정
@@ -284,20 +283,8 @@ def main():
             print("python-hwplib 폴더에 hwplib-1.1.8.jar이 있는지 확인하세요.")
             sys.exit(1)
         
-        # JAVA_HOME 자동 설정
-        if 'JAVA_HOME' not in os.environ:
-            # Windows에서 자동으로 Java 찾기
-            try:
-                java_path = subprocess.check_output('where java', shell=True).decode().strip().split('\n')[0]
-                # C:\Program Files\Java\jdk-21\bin\java.exe -> C:\Program Files\Java\jdk-21
-                java_home = os.path.dirname(os.path.dirname(java_path))
-                os.environ['JAVA_HOME'] = java_home
-                print(f"[정보] JAVA_HOME 자동 설정: {java_home}")
-            except:
-                print("[오류] JAVA_HOME 환경변수를 찾을 수 없습니다.")
-                print("       Java가 설치되어 있는지 확인하세요.")
-                print("       또는 다음 명령으로 테스트: python test_jpype.py")
-                sys.exit(1)
+        # JAVA_HOME 설정
+        os.environ['JAVA_HOME'] = r'C:\Program Files\Java\jdk-21'
         
         result = extract_hwp_text(hwp_jar_path, file_path)
     
