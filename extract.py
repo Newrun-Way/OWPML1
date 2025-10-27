@@ -163,6 +163,9 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
 def save_results(result, output_dir="extracted_data"):
     """추출 결과를 파일로 저장"""
     
+    # 출력 디렉토리 생성
+    os.makedirs(output_dir, exist_ok=True)
+    
     base_name = Path(output_dir).stem
     
     # 1. 전체 텍스트 저장
@@ -272,11 +275,15 @@ def main():
         result = extract_hwpx_with_structure(file_path, output_dir)
     else:  # .hwp
         # HWP: 텍스트만 추출
-        # JAR 파일 경로
-        hwp_jar_path = os.path.join(os.path.dirname(__file__), "..", "python-hwplib", "hwplib-1.1.8.jar")
+        # JAR 파일 경로 (extract.py가 루트에 있으므로 상대 경로 직접 사용)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        hwp_jar_path = os.path.join(script_dir, "python-hwplib", "hwplib-1.1.8.jar")
+        
         if not os.path.exists(hwp_jar_path):
             print(f"[오류] hwplib JAR 파일을 찾을 수 없습니다: {hwp_jar_path}")
             print("python-hwplib 폴더에 hwplib-1.1.8.jar이 있는지 확인하세요.")
+            print(f"[디버그] 스크립트 위치: {script_dir}")
+            print(f"[디버그] 찾는 경로: {hwp_jar_path}")
             sys.exit(1)
         
         # HWP 추출 (init_jpype()가 JAVA_HOME 자동 설정)
