@@ -41,6 +41,7 @@ desktop.ini
 venv/
 ENV/
 
-# 회고록 (개인 작업 기록)
+# 개인 작업 기록
 회고록/
+docs/
 
