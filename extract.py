@@ -12,9 +12,9 @@ import xml.etree.ElementTree as ET
 import json
 import os
 import sys
-import jpype
 import io
 from pathlib import Path
+from jpype_setup import init_jpype
 
 # Windows에서 UTF-8 출력을 위한 설정
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -133,12 +133,8 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
         "file_type": "HWP"
     }
     
-    # jpype 시작
-    jpype.startJVM(
-        jpype.getDefaultJVMPath(),
-        f"-Djava.class.path={hwp_jar_path}",
-        convertStrings=True,
-    )
+    # jpype 초기화 (JAVA_HOME 자동 설정 + JVM 시작)
+    jpype = init_jpype(hwp_jar_path)
     
     try:
         # Java 패키지 가져오기
@@ -283,10 +279,14 @@ def main():
             print("python-hwplib 폴더에 hwplib-1.1.8.jar이 있는지 확인하세요.")
             sys.exit(1)
         
-        # JAVA_HOME 설정
-        os.environ['JAVA_HOME'] = r'C:\Program Files\Java\jdk-21'
-        
-        result = extract_hwp_text(hwp_jar_path, file_path)
+        # HWP 추출 (init_jpype()가 JAVA_HOME 자동 설정)
+        try:
+            result = extract_hwp_text(hwp_jar_path, file_path)
+        except Exception as e:
+            print(f"[오류] HWP 추출 실패: {e}")
+            print("       Java 설치 확인: python jpype_setup.py")
+            print("       전체 환경 테스트: python test_jpype.py")
+            sys.exit(1)
     
     # 결과 저장
     files = save_results(result, output_dir)
