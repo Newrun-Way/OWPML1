@@ -45,3 +45,8 @@ ENV/
 회고록/
 docs/
 
+# RAG 시스템 데이터
+data/
+logs/
+extracted_results/
+

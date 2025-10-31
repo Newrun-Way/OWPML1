@@ -275,7 +275,7 @@ def main():
         result = extract_hwpx_with_structure(file_path, output_dir)
     else:  # .hwp
         # HWP: 텍스트만 추출
-        # JAR 파일 경로 (extract.py가 루트에 있으므로 상대 경로 직접 사용)
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
         hwp_jar_path = os.path.join(script_dir, "python-hwplib", "hwplib-1.1.8.jar")
         
