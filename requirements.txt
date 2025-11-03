@@ -1,5 +1,5 @@
 # RAG 시스템 의존성
-# Python 3.13 기준
+# Python 3.10+ 기준
 
 # 임베딩 및 벡터 검색
 sentence-transformers==3.3.1
@@ -7,29 +7,37 @@ faiss-cpu==1.9.0.post1
 # faiss-gpu==1.9.0.post1  # GPU 사용 시 주석 해제
 
 # LLM API
-openai==1.59.5
+openai==2.6.1
 
-# 텍스트 처리 및 청킹
-langchain==0.3.13
-langchain-community==0.3.13
-langchain-openai==0.2.14
+# 텍스트 처리 및 청킹 (LangChain 1.0+)
+langchain==1.0.3
+langchain-community==0.4.1
+langchain-openai==1.0.1
+langchain-text-splitters==1.0.0
+langchain-core==1.0.2
 tiktoken==0.8.0
 
 # 데이터 처리
-numpy==2.2.1
-pandas==2.2.3
+numpy>=1.25.0,<2.0  # LangChain 호환성을 위해 <2.0
+transformers==4.57.1
 
-# 파일 처리 (기존 HWP/HWPX)
+# PyTorch (CPU/GPU)
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+# GPU 사용 시: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# 파일 처리 (HWP/HWPX)
 JPype1==1.6.0
 
 # 유틸리티
 python-dotenv==1.0.1
-tqdm==4.67.1
-
-# 웹 UI (선택사항)
-streamlit==1.41.1
-gradio==5.9.1
-
-# 로깅 및 모니터링
 loguru==0.7.3
 
+# 추가 의존성 (자동 설치됨)
+# - huggingface-hub
+# - safetensors
+# - tokenizers
+# - pydantic
+# - requests
+# - tqdm
