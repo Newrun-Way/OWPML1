@@ -8,7 +8,7 @@ import numpy as np
 import faiss
 import pickle
 from pathlib import Path
-from langchain.schema import Document
+from langchain_core.documents import Document
 import config
 from loguru import logger
 
@@ -195,7 +195,7 @@ class VectorStore:
 def test_vector_store():
     """벡터 저장소 테스트"""
     from rag.embedder import DocumentEmbedder
-    from langchain.schema import Document
+    from langchain_core.documents import Document
     
     # 임베더 초기화
     embedder = DocumentEmbedder()
