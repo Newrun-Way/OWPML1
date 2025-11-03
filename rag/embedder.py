@@ -6,7 +6,7 @@ BGE-M3 모델을 사용한 텍스트 임베딩
 from typing import List, Union
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from langchain.schema import Document
+from langchain_core.documents import Document
 import config
 from loguru import logger
 

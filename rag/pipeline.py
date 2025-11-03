@@ -6,7 +6,7 @@ RAG 파이프라인
 from typing import List, Dict
 from pathlib import Path
 import json
-from langchain.schema import Document
+from langchain_core.documents import Document
 import config
 from loguru import logger
 
