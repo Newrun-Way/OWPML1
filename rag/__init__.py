@@ -6,6 +6,7 @@ from rag.chunker import DocumentChunker
 from rag.embedder import DocumentEmbedder
 from rag.vector_store import VectorStore
 from rag.llm import LLMGenerator
+from rag.reranker import DocumentReranker
 from rag.pipeline import RAGPipeline
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     'DocumentEmbedder',
     'VectorStore',
     'LLMGenerator',
+    'DocumentReranker',
     'RAGPipeline'
 ]
 

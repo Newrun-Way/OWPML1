@@ -14,6 +14,7 @@ from rag.chunker import DocumentChunker
 from rag.embedder import DocumentEmbedder
 from rag.vector_store import VectorStore
 from rag.llm import LLMGenerator
+from rag.reranker import DocumentReranker
 
 
 class RAGPipeline:
@@ -35,6 +36,14 @@ class RAGPipeline:
         self.chunker = DocumentChunker()
         self.embedder = DocumentEmbedder()
         self.llm = LLMGenerator()
+        
+        # Reranker 초기화 (옵션)
+        if config.USE_RERANKER:
+            logger.info("Reranker 활성화")
+            self.reranker = DocumentReranker()
+        else:
+            logger.info("Reranker 비활성화")
+            self.reranker = None
         
         # 벡터 저장소 로드 또는 생성
         self.vector_store_dir = Path(vector_store_dir)
@@ -174,7 +183,9 @@ class RAGPipeline:
         query_embedding = self.embedder.embed_query(question)
         
         # 2. 유사 문서 검색
-        search_results = self.vector_store.search(query_embedding, top_k=top_k)
+        # Reranker 사용 시 더 많은 후보 검색
+        initial_top_k = config.RERANK_TOP_K if self.reranker else top_k
+        search_results = self.vector_store.search(query_embedding, top_k=initial_top_k)
         
         if not search_results:
             logger.warning("검색 결과 없음")
@@ -184,6 +195,16 @@ class RAGPipeline:
                 "question": question,
                 "processing_time": time.time() - start_time
             }
+        
+        # 2.5. Reranking (옵션)
+        if self.reranker:
+            logger.info(f"Reranking 수행: {len(search_results)}개 문서")
+            search_results = self.reranker.rerank(
+                query=question,
+                documents=search_results,
+                top_k=config.FINAL_TOP_K
+            )
+            logger.info(f"Reranking 완료: {len(search_results)}개 문서 선택")
         
         # 3. 컨텍스트 구성
         contexts = []

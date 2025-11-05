@@ -43,6 +43,13 @@ SEPARATORS = ["\n\n", "\n", ".", "!", "?", " ", ""]
 TOP_K = 5  # 검색할 문서 청크 수
 SIMILARITY_THRESHOLD = 0.7  # 유사도 임계값
 
+# Reranker 설정
+USE_RERANKER = True  # Reranker 사용 여부
+RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"  # Reranker 모델
+RERANK_TOP_K = 10  # Reranker에 전달할 후보 문서 수 (TOP_K보다 크게)
+RERANK_THRESHOLD = 0.0  # Rerank 점수 임계값 (보통 -10~10 범위)
+FINAL_TOP_K = 3  # 최종 반환 문서 수
+
 # 프롬프트 설정
 SYSTEM_PROMPT = """당신은 한국어 공문서 전문 AI 어시스턴트입니다.
 
@@ -52,15 +59,18 @@ SYSTEM_PROMPT = """당신은 한국어 공문서 전문 AI 어시스턴트입니
 - 표의 내용은 정확히 인용
 
 답변 형식:
-1. 핵심 답변 (1-2문장)
-2. 근거 (문서 인용)
-3. 출처 (문서명)
+1. 핵심 답변 (2-3문장)
+2. 근거 (문서에서 직접 인용, "" 사용)
+3. 출처 (문서명 및 해당 섹션)
 
 규칙:
 - 존댓말 사용
-- 간결하고 명확하게
+- 명확하게
 - 추측하지 말 것
 - 표는 마크다운 형식으로 표시
+- 문서 내용만 사용, 외부 지식 사용 금지
+- 애매하면 "확실하지 않습니다" 표시
+- 여러 답변 가능하면 모두 제시
 """
 
 USER_PROMPT_TEMPLATE = """다음 문서를 참고하여 질문에 답해주세요.
