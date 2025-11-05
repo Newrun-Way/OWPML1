@@ -4,7 +4,12 @@ HWP/HWPX 통합 추출 스크립트
 - HWP: 텍스트 추출
 
 사용법:
-    python extract.py <파일경로>
+    단일 파일: python extract.py <파일경로>
+    폴더 처리: python extract.py <폴더경로>
+    
+예시:
+    python extract.py "문서.hwpx"
+    python extract.py "hwp data/"
 """
 
 import zipfile
@@ -241,25 +246,14 @@ def save_results(result, output_dir="extracted_data"):
     }
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("사용법: python extract.py <파일경로>")
-        print("지원 형식: HWP, HWPX")
-        sys.exit(1)
-    
-    file_path = sys.argv[1]
-    
-    if not os.path.exists(file_path):
-        print(f"[오류] 파일을 찾을 수 없습니다: {file_path}")
-        sys.exit(1)
-    
+def process_single_file(file_path):
+    """단일 파일 처리"""
     # 파일 확장자 확인
     file_ext = Path(file_path).suffix.lower()
     
     if file_ext not in ['.hwp', '.hwpx']:
-        print(f"[오류] 지원하지 않는 파일 형식입니다: {file_ext}")
-        print("지원 형식: .hwp, .hwpx")
-        sys.exit(1)
+        print(f"[건너뜀] 지원하지 않는 형식: {file_path}")
+        return None
     
     # 출력 디렉토리 이름 생성
     base_name = Path(file_path).stem
@@ -269,67 +263,154 @@ def main():
     print(f"[형식] {file_ext.upper()}")
     print("[추출 중...]\n")
     
-    # 파일 형식에 따라 처리
-    if file_ext == '.hwpx':
-        # HWPX: 표, 이미지 포함 완벽 추출
-        result = extract_hwpx_with_structure(file_path, output_dir)
-    else:  # .hwp
-        # HWP: 텍스트만 추출
-
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        hwp_jar_path = os.path.join(script_dir, "python-hwplib", "hwplib-1.1.8.jar")
-        
-        if not os.path.exists(hwp_jar_path):
-            print(f"[오류] hwplib JAR 파일을 찾을 수 없습니다: {hwp_jar_path}")
-            print("python-hwplib 폴더에 hwplib-1.1.8.jar이 있는지 확인하세요.")
-            print(f"[디버그] 스크립트 위치: {script_dir}")
-            print(f"[디버그] 찾는 경로: {hwp_jar_path}")
-            sys.exit(1)
-        
-        # HWP 추출 (init_jpype()가 JAVA_HOME 자동 설정)
-        try:
+    try:
+        # 파일 형식에 따라 처리
+        if file_ext == '.hwpx':
+            # HWPX: 표, 이미지 포함 완벽 추출
+            result = extract_hwpx_with_structure(file_path, output_dir)
+        else:  # .hwp
+            # HWP: 텍스트만 추출
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            hwp_jar_path = os.path.join(script_dir, "python-hwplib", "hwplib-1.1.8.jar")
+            
+            if not os.path.exists(hwp_jar_path):
+                print(f"[오류] hwplib JAR 파일을 찾을 수 없습니다: {hwp_jar_path}")
+                print("python-hwplib 폴더에 hwplib-1.1.8.jar이 있는지 확인하세요.")
+                return None
+            
+            # HWP 추출 (init_jpype()가 JAVA_HOME 자동 설정)
             result = extract_hwp_text(hwp_jar_path, file_path)
-        except Exception as e:
-            print(f"[오류] HWP 추출 실패: {e}")
-            print("       Java 설치 확인: python jpype_setup.py")
-            print("       전체 환경 테스트: python test_jpype.py")
-            sys.exit(1)
-    
-    # 결과 저장
-    files = save_results(result, output_dir)
-    
-    # 결과 출력
-    print("[추출 완료]\n")
-    print("=" * 60)
-    print("추출 결과 요약")
-    print("=" * 60)
-    print(f"파일 형식: {result['file_type']}")
-    print(f"단락 수: {len(result['paragraphs'])}개")
-    print(f"표 개수: {len(result['tables'])}개")
-    print(f"이미지 개수: {len(result['images'])}개")
-    print(f"전체 텍스트: {len(''.join(result['text_content']))} 글자\n")
-    
-    print("=" * 60)
-    print("생성된 파일")
-    print("=" * 60)
-    print(f"출력 폴더: {os.path.abspath(output_dir)}\n")
-    print(f"  - {os.path.basename(files['text_file'])}")
-    if files['table_json']:
-        print(f"  - {os.path.basename(files['table_json'])}")
-        print(f"  - {os.path.basename(files['table_txt'])}")
-    print(f"  - {os.path.basename(files['structure_json'])}")
-    print(f"  - {os.path.basename(files['report_file'])}")
-    
-    if result['images']:
-        print(f"\n  이미지 파일들:")
-        for img in result['images']:
-            print(f"     - {img['filename']}")
-    
-    if result['file_type'] == 'HWP':
-        print("\n" + "=" * 60)
-        print("[참고] HWP 파일은 텍스트만 추출됩니다.")
-        print("표, 이미지가 필요하면 한글 프로그램에서 HWPX로 저장하세요.")
+        
+        # 결과 저장
+        files = save_results(result, output_dir)
+        
+        # 결과 출력
+        print("[추출 완료]\n")
         print("=" * 60)
+        print("추출 결과 요약")
+        print("=" * 60)
+        print(f"파일 형식: {result['file_type']}")
+        print(f"단락 수: {len(result['paragraphs'])}개")
+        print(f"표 개수: {len(result['tables'])}개")
+        print(f"이미지 개수: {len(result['images'])}개")
+        print(f"전체 텍스트: {len(''.join(result['text_content']))} 글자\n")
+        
+        print("=" * 60)
+        print("생성된 파일")
+        print("=" * 60)
+        print(f"출력 폴더: {os.path.abspath(output_dir)}\n")
+        print(f"  - {os.path.basename(files['text_file'])}")
+        if files['table_json']:
+            print(f"  - {os.path.basename(files['table_json'])}")
+            print(f"  - {os.path.basename(files['table_txt'])}")
+        print(f"  - {os.path.basename(files['structure_json'])}")
+        print(f"  - {os.path.basename(files['report_file'])}")
+        
+        if result['images']:
+            print(f"\n  이미지 파일들:")
+            for img in result['images']:
+                print(f"     - {img['filename']}")
+        
+        if result['file_type'] == 'HWP':
+            print("\n" + "=" * 60)
+            print("[참고] HWP 파일은 텍스트만 추출됩니다.")
+            print("표, 이미지가 필요하면 한글 프로그램에서 HWPX로 저장하세요.")
+            print("=" * 60)
+        
+        return result
+        
+    except Exception as e:
+        print(f"[오류] 추출 실패: {e}")
+        return None
+
+
+def process_folder(folder_path):
+    """폴더 내 모든 HWP/HWPX 파일 일괄 처리"""
+    # 폴더 내 모든 HWP/HWPX 파일 검색
+    folder = Path(folder_path)
+    hwp_files = list(folder.glob("*.hwp"))
+    hwpx_files = list(folder.glob("*.hwpx"))
+    all_files = hwp_files + hwpx_files
+    
+    if not all_files:
+        print(f"[오류] 폴더에 HWP/HWPX 파일이 없습니다: {folder_path}")
+        return
+    
+    print("=" * 70)
+    print(f"폴더 일괄 처리 모드")
+    print("=" * 70)
+    print(f"폴더: {os.path.abspath(folder_path)}")
+    print(f"발견된 파일: {len(all_files)}개")
+    print(f"  - HWP: {len(hwp_files)}개")
+    print(f"  - HWPX: {len(hwpx_files)}개")
+    print("=" * 70 + "\n")
+    
+    # 각 파일 처리
+    results = {
+        "success": [],
+        "failed": []
+    }
+    
+    for idx, file_path in enumerate(all_files, 1):
+        print(f"\n{'='*70}")
+        print(f"진행: {idx}/{len(all_files)}")
+        print(f"{'='*70}\n")
+        
+        result = process_single_file(str(file_path))
+        
+        if result:
+            results["success"].append(file_path.name)
+        else:
+            results["failed"].append(file_path.name)
+        
+        print()  # 구분선
+    
+    # 최종 요약
+    print("\n" + "=" * 70)
+    print("일괄 처리 완료")
+    print("=" * 70)
+    print(f"총 파일 수: {len(all_files)}개")
+    print(f"성공: {len(results['success'])}개")
+    print(f"실패: {len(results['failed'])}개")
+    
+    if results['success']:
+        print("\n[성공한 파일]")
+        for fname in results['success']:
+            print(f"  - {fname}")
+    
+    if results['failed']:
+        print("\n[실패한 파일]")
+        for fname in results['failed']:
+            print(f"  - {fname}")
+    
+    print("\n[출력 위치]")
+    print(f"  {os.path.abspath('extracted_results/')}")
+    print("=" * 70)
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("사용법:")
+        print("  단일 파일: python extract.py <파일경로>")
+        print("  폴더 처리: python extract.py <폴더경로>")
+        print("\n지원 형식: HWP, HWPX")
+        sys.exit(1)
+    
+    target_path = sys.argv[1]
+    
+    if not os.path.exists(target_path):
+        print(f"[오류] 경로를 찾을 수 없습니다: {target_path}")
+        sys.exit(1)
+    
+    # 폴더인지 파일인지 확인
+    if os.path.isdir(target_path):
+        # 폴더 처리
+        process_folder(target_path)
+    else:
+        # 단일 파일 처리
+        result = process_single_file(target_path)
+        if result is None:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

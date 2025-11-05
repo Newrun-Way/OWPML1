@@ -5,8 +5,11 @@
 ## 핵심 명령어
 
 ```powershell
-cd "C:\Users\chodo\Desktop\Al Lang\python-hwpxlib"
+# 단일 파일 처리
 python extract.py "파일경로"
+
+# 폴더 일괄 처리 (NEW!)
+python extract.py "폴더경로"
 ```
 
 HWP든 HWPX든 자동으로 처리
@@ -18,11 +21,11 @@ HWP든 HWPX든 자동으로 처리
 ### HWPX 파일
 ```
 입력: 파일.hwpx
-출력 위치: python-hwpxlib/extracted_results/extracted_파일명/
+출력 위치: extracted_results/extracted_파일명/
   - 전체텍스트.txt
-  - 표데이터.json (99개 표)
-  - 표목록.txt
-  - 이미지 파일들
+  - 표데이터.json (표 있을 경우)
+  - 표목록.txt (표 있을 경우)
+  - 이미지 파일들 (이미지 있을 경우)
   - 구조.json
   - 추출요약.txt
 ```
@@ -30,7 +33,7 @@ HWP든 HWPX든 자동으로 처리
 ### HWP 파일
 ```
 입력: 파일.hwp
-출력 위치: python-hwpxlib/extracted_results/extracted_파일명/
+출력 위치: extracted_results/extracted_파일명/
   - 전체텍스트.txt (텍스트만)
   - 구조.json
   - 추출요약.txt
@@ -41,29 +44,55 @@ HWP든 HWPX든 자동으로 처리
 ---
 ## 사용 예시
 
-### 기본 사용
+### 1. 단일 파일 처리
 ```powershell
 # HWPX 파일
-python extract.py "..\hwp data\문서.hwpx"
+python extract.py "hwp data/문서.hwpx"
 
 # HWP 파일
-python extract.py "..\hwp data\문서.hwp"
+python extract.py "hwp data/문서.hwp"
 
 # 둘 다 같은 명령어! 자동 감지됨
 ```
 
-### 여러 파일 한번에
+### 2. 폴더 일괄 처리 (NEW!)
 ```powershell
-# 폴더의 모든 한글 파일 처리
-Get-ChildItem "..\hwp data\*.hwp*" | ForEach-Object {
-    python extract.py $_.FullName
-}
+# 폴더 내 모든 HWP/HWPX 파일을 한번에 처리
+python extract.py "hwp data/"
+
+# 실행 결과:
+# ======================================================================
+# 폴더 일괄 처리 모드
+# ======================================================================
+# 폴더: C:\Users\chodo\Desktop\Al Lang\hwp data
+# 발견된 파일: 15개
+#   - HWP: 3개
+#   - HWPX: 12개
+# ======================================================================
+# 
+# 진행: 1/15
+# [파일] hwp data\보고서.hwpx
+# [추출 완료]
+# ...
+# 
+# 일괄 처리 완료
+# 총 파일 수: 15개
+# 성공: 15개
+# 실패: 0개
+```
+
+### 3. EC2 (Ubuntu)에서 사용
+```bash
+# 단일 파일
+python3 extract.py "hwp_data/문서.hwpx"
+
+# 폴더 일괄 처리
+python3 extract.py "hwp_data/"
 ```
 
 ---
 
-
-## 프로젝트에서 권장 워크플로우
+워크플로우우
 
 ```
 1. 모든 HWP 파일을 HWPX로 변환
@@ -100,5 +129,4 @@ result = subprocess.run([
 C:\Users\chodo\Desktop\Al Lang\python-hwpxlib\extract.py
 ```
 
-**작성일**: 2025년 10월 22일
 
