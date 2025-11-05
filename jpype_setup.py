@@ -6,21 +6,65 @@ extract.py 모듈화를 위한 공통 설정 함수
 import os
 import sys
 import subprocess
+import platform
+
+
+def get_jvm_lib_paths(java_home):
+    """
+    OS별 JVM 라이브러리 경로 후보 반환
+    
+    Args:
+        java_home: Java 홈 디렉토리
+    
+    Returns:
+        list: 가능한 JVM 라이브러리 경로들
+    """
+    is_windows = platform.system() == 'Windows'
+    
+    if is_windows:
+        # Windows: jvm.dll
+        return [
+            os.path.join(java_home, 'bin', 'server', 'jvm.dll'),
+            os.path.join(java_home, 'jre', 'bin', 'server', 'jvm.dll'),
+        ]
+    else:
+        # Linux/Mac: libjvm.so
+        return [
+            os.path.join(java_home, 'lib', 'server', 'libjvm.so'),
+            os.path.join(java_home, 'lib', 'amd64', 'server', 'libjvm.so'),
+            os.path.join(java_home, 'lib', 'aarch64', 'server', 'libjvm.so'),
+            os.path.join(java_home, 'jre', 'lib', 'server', 'libjvm.so'),
+            os.path.join(java_home, 'jre', 'lib', 'amd64', 'server', 'libjvm.so'),
+        ]
+
+
+def verify_java_home(java_home):
+    """
+    JAVA_HOME이 유효한지 확인 (JVM 라이브러리 존재 여부)
+    
+    Args:
+        java_home: Java 홈 디렉토리
+    
+    Returns:
+        bool: 유효하면 True
+    """
+    jvm_paths = get_jvm_lib_paths(java_home)
+    return any(os.path.exists(path) for path in jvm_paths)
 
 
 def setup_java_home():
     """
-    JAVA_HOME 환경변수를 자동으로 설정
+    JAVA_HOME 환경변수를 자동으로 설정 (Windows/Linux 호환)
     이미 설정되어 있으면 그대로 사용
     """
+    is_windows = platform.system() == 'Windows'
+    
+    # 이미 JAVA_HOME이 설정되어 있는지 확인
     if 'JAVA_HOME' in os.environ:
         java_home = os.environ['JAVA_HOME']
-        # jvm.dll이 실제로 존재하는지 확인
-        jvm_dll = os.path.join(java_home, 'bin', 'server', 'jvm.dll')
-        if os.path.exists(jvm_dll):
+        if verify_java_home(java_home):
             return java_home
     
-    # Windows에서 자동으로 Java 찾기
     # 방법 1: java -XshowSettings:properties로 실제 Java 경로 찾기
     try:
         result = subprocess.run(
@@ -33,35 +77,59 @@ def setup_java_home():
         
         for line in output.split('\n'):
             if 'java.home' in line and '=' in line:
-                # "    java.home = C:\Program Files\Java\jdk-21"
+                # "    java.home = /usr/lib/jvm/java-11-openjdk-amd64"
                 java_home = line.split('=', 1)[1].strip()
                 
-                # jvm.dll 존재 확인
-                jvm_dll = os.path.join(java_home, 'bin', 'server', 'jvm.dll')
-                if os.path.exists(jvm_dll):
+                if verify_java_home(java_home):
                     os.environ['JAVA_HOME'] = java_home
                     return java_home
     except Exception as e:
         pass
     
-    # 방법 2: where java로 찾기 (fallback)
+    # 방법 2: where/which java로 찾기 (fallback)
     try:
-        java_path = subprocess.check_output('where java', shell=True).decode().strip().split('\n')[0]
+        if is_windows:
+            cmd = 'where java'
+        else:
+            cmd = 'which java'
+        
+        java_path = subprocess.check_output(cmd, shell=True).decode().strip().split('\n')[0]
+        
+        # /usr/bin/java -> /usr/lib/jvm/java-11-openjdk-amd64
         # C:\Program Files\Java\jdk-21\bin\java.exe -> C:\Program Files\Java\jdk-21
+        
+        if not is_windows:
+            # Linux: 심볼릭 링크를 따라가서 실제 경로 찾기
+            java_path = os.path.realpath(java_path)
+        
+        # bin/java 제거하여 JAVA_HOME 추출
         java_home = os.path.dirname(os.path.dirname(java_path))
         
-        # jvm.dll 존재 확인
-        jvm_dll = os.path.join(java_home, 'bin', 'server', 'jvm.dll')
-        if os.path.exists(jvm_dll):
+        if verify_java_home(java_home):
             os.environ['JAVA_HOME'] = java_home
             return java_home
-    except:
+    except Exception as e:
         pass
+    
+    # 방법 3 (Linux 전용): 일반적인 JVM 경로 스캔
+    if not is_windows:
+        common_paths = [
+            '/usr/lib/jvm/default-java',
+            '/usr/lib/jvm/java-11-openjdk-amd64',
+            '/usr/lib/jvm/java-17-openjdk-amd64',
+            '/usr/lib/jvm/java-21-openjdk-amd64',
+        ]
+        
+        for path in common_paths:
+            if os.path.exists(path) and verify_java_home(path):
+                os.environ['JAVA_HOME'] = path
+                return path
     
     raise EnvironmentError(
         "JAVA_HOME 환경변수를 찾을 수 없습니다.\n"
         "Java JDK가 제대로 설치되어 있는지 확인하세요.\n"
-        "JRE가 아닌 JDK를 설치해야 합니다: https://adoptium.net/"
+        + ("JDK 설치: https://adoptium.net/" if is_windows else 
+           "Ubuntu: sudo apt update && sudo apt install -y default-jdk")
     )
 
 
@@ -114,15 +182,18 @@ def init_jpype(jar_path=None):
 
 def get_java_info():
     """
-    현재 Java 환경 정보 반환
+    현재 Java 환경 정보 반환 (Windows/Linux 호환)
     
     Returns:
         dict: Java 버전, 경로 등
     """
+    is_windows = platform.system() == 'Windows'
+    
     info = {
         'java_home': os.environ.get('JAVA_HOME', 'Not set'),
         'java_version': None,
-        'java_path': None
+        'java_path': None,
+        'os': platform.system()
     }
     
     try:
@@ -136,7 +207,8 @@ def get_java_info():
         info['java_version'] = 'Not found'
     
     try:
-        java_path = subprocess.check_output('where java', shell=True).decode().strip().split('\n')[0]
+        cmd = 'where java' if is_windows else 'which java'
+        java_path = subprocess.check_output(cmd, shell=True).decode().strip().split('\n')[0]
         info['java_path'] = java_path
     except:
         info['java_path'] = 'Not found'
@@ -152,6 +224,7 @@ if __name__ == "__main__":
     
     # Java 정보 확인
     info = get_java_info()
+    print(f"\n운영체제: {info['os']}")
     print(f"\nJava 정보:")
     print(f"  JAVA_HOME: {info['java_home']}")
     print(f"  Java 버전: {info['java_version']}")
@@ -161,6 +234,14 @@ if __name__ == "__main__":
     try:
         java_home = setup_java_home()
         print(f"\n[성공] JAVA_HOME 설정: {java_home}")
+        
+        # JVM 라이브러리 경로 표시
+        jvm_paths = get_jvm_lib_paths(java_home)
+        print(f"\n[확인] JVM 라이브러리 경로:")
+        for jvm_path in jvm_paths:
+            exists = "존재" if os.path.exists(jvm_path) else "없음"
+            print(f"  - {jvm_path} [{exists}]")
+        
     except Exception as e:
         print(f"\n[오류] JAVA_HOME 설정 실패: {e}")
         sys.exit(1)
@@ -168,11 +249,11 @@ if __name__ == "__main__":
     # JPype 초기화 테스트
     try:
         jpype = init_jpype()
-        print(f"[성공] JPype 초기화 완료")
+        print(f"\n[성공] JPype 초기화 완료")
         print(f"       JPype 버전: {jpype.__version__}")
         print(f"       JVM 실행 중: {jpype.isJVMStarted()}")
     except Exception as e:
-        print(f"[오류] JPype 초기화 실패: {e}")
+        print(f"\n[오류] JPype 초기화 실패: {e}")
         sys.exit(1)
     
     print("\n" + "=" * 60)
