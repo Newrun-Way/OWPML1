@@ -388,13 +388,29 @@ def process_folder(folder_path):
     print("=" * 70)
     
     import subprocess
+    
+    # 부모 프로세스에서 먼저 JAVA_HOME 설정
+    try:
+        from jpype_setup import setup_java_home
+        java_home = setup_java_home()
+        print(f"\n[JAVA_HOME 설정] {java_home}\n")
+    except Exception as e:
+        print(f"\n[경고] JAVA_HOME 자동 설정 실패: {e}")
+        print("수동으로 설정 필요: export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64\n")
+    
     for idx, file_path in enumerate(hwp_files, 1):
         print(f"\n진행: {idx}/{len(hwp_files)}")
         print(f"[파일] {file_path}")
         
         # 새 Python 프로세스에서 HWP 파일 처리
+        # 부모 프로세스의 환경변수(JAVA_HOME 포함)를 자식 프로세스로 전달
         script_path = os.path.abspath(__file__)
-        result_code = subprocess.call([sys.executable, script_path, str(file_path)])
+        env = os.environ.copy()  # 부모 환경변수 복사
+        
+        result_code = subprocess.call(
+            [sys.executable, script_path, str(file_path)],
+            env=env  # 환경변수 명시적 전달
+        )
         
         if result_code == 0:
             results["success"].append(file_path.name)
