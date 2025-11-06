@@ -14,7 +14,7 @@ import json
 import time
 
 # 처리 기록 파일
-PROCESSED_LOG = Path("data/.proces1ed_documents.json")
+PROCESSED_LOG = Path("data/.processed_documents.json")
 
 def load_processed_log():
     """이미 처리한 문서 목록 로드"""
@@ -63,8 +63,8 @@ def main():
     parser = argparse.ArgumentParser(description="추출된 문서를 RAG 시스템에 자동 추가")
     parser.add_argument("--all", action="store_true", help="모든 문서 재추가")
     parser.add_argument("--folder", type=str, help="특정 폴더만 추가")
-    parser.add_argument("--source", type=str, default="data/extracted", 
-                       help="문서가 있는 폴더 경로 (기본: data/extracted)")
+    parser.add_argument("--source", type=str, default="extracted_results", 
+                       help="문서가 있는 폴더 경로 (기본: extracted_results)")
     args = parser.parse_args()
     
     print("\n" + "="*70)
@@ -75,7 +75,9 @@ def main():
     source_path = Path(args.source)
     if not source_path.exists():
         print(f"\n⚠ 소스 폴더가 없습니다: {source_path}")
-        print(f"팀원이 추출한 결과물을 {source_path}/ 폴더에 넣어주세요.")
+        print(f"\n사용 방법:")
+        print(f"  python3 auto_add.py --source extracted_results  # extract.py 결과물")
+        print(f"  python3 auto_add.py --source data/extracted     # 팀원이 전달한 데이터")
         return
     
     # 추출된 문서 폴더 목록
