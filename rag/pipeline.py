@@ -121,6 +121,13 @@ class RAGPipeline:
         self.vector_store.save(self.vector_store_dir)
         
         logger.info(f"문서 추가 완료: {len(chunks)}개 청크")
+        
+        # 결과 반환
+        return {
+            'chunks_added': len(chunks),
+            'doc_name': metadata['doc_name'],
+            'file_type': metadata.get('file_type', 'unknown')
+        }
     
     def add_documents_batch(
         self,
