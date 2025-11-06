@@ -138,8 +138,20 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
         "file_type": "HWP"
     }
     
-    # jpype 초기화 (JAVA_HOME 자동 설정 + JVM 시작)
-    jpype = init_jpype(hwp_jar_path)
+    try:
+        # jpype 초기화 (JAVA_HOME 자동 설정 + JVM 시작)
+        jpype = init_jpype(hwp_jar_path)
+    except RuntimeError as e:
+        # JVM 시작 실패 시 상세 오류 메시지
+        raise RuntimeError(
+            f"[HWP 추출 실패] JVM 시작 오류:\n"
+            f"{str(e)}\n\n"
+            f"해결 방법:\n"
+            f"1. Java 설치 확인: java -version\n"
+            f"2. 환경 설정 테스트: python3 jpype_setup.py\n"
+            f"3. 폴더 일괄 처리는 HWP 파일을 각각 다른 프로세스로 처리하세요:\n"
+            f"   for f in *.hwp; do python3 extract.py \"$f\"; done"
+        )
     
     try:
         # Java 패키지 가져오기
@@ -159,8 +171,11 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
         # 메타데이터
         result["metadata"]["note"] = "HWP 파일은 텍스트만 추출됩니다. 표/이미지가 필요하면 HWPX로 저장하세요."
         
-    finally:
-        pass
+    except Exception as e:
+        raise RuntimeError(
+            f"[HWP 파일 파싱 실패]: {str(e)}\n"
+            f"파일: {hwp_path}"
+        )
     
     return result
 
@@ -351,19 +366,42 @@ def process_folder(folder_path):
         "failed": []
     }
     
-    for idx, file_path in enumerate(all_files, 1):
-        print(f"\n{'='*70}")
-        print(f"진행: {idx}/{len(all_files)}")
-        print(f"{'='*70}\n")
-        
+    # HWPX 파일과 HWP 파일 분리
+    hwpx_files = [f for f in all_files if f.suffix.lower() == '.hwpx']
+    hwp_files = [f for f in all_files if f.suffix.lower() == '.hwp']
+    
+    # HWPX 파일 먼저 처리 (같은 프로세스에서 가능)
+    print("\n[Phase 1] HWPX 파일 처리 (같은 프로세스)")
+    print("=" * 70)
+    
+    for idx, file_path in enumerate(hwpx_files, 1):
+        print(f"\n진행: {idx}/{len(hwpx_files)}")
         result = process_single_file(str(file_path))
         
         if result:
             results["success"].append(file_path.name)
         else:
             results["failed"].append(file_path.name)
+    
+    # HWP 파일은 각각 새 프로세스에서 처리 (JVM 제약 때문)
+    print("\n\n[Phase 2] HWP 파일 처리 (각 파일마다 새 프로세스)")
+    print("=" * 70)
+    
+    import subprocess
+    for idx, file_path in enumerate(hwp_files, 1):
+        print(f"\n진행: {idx}/{len(hwp_files)}")
+        print(f"[파일] {file_path}")
         
-        print()  # 구분선
+        # 새 Python 프로세스에서 HWP 파일 처리
+        script_path = os.path.abspath(__file__)
+        result_code = subprocess.call([sys.executable, script_path, str(file_path)])
+        
+        if result_code == 0:
+            results["success"].append(file_path.name)
+            print(f"[완료] {file_path.name}")
+        else:
+            results["failed"].append(file_path.name)
+            print(f"[실패] {file_path.name}")
     
     # 최종 요약
     print("\n" + "=" * 70)
