@@ -19,7 +19,7 @@ PROCESSED_LOG = Path("data/.processed_documents.json")
 def load_processed_log():
     """이미 처리한 문서 목록 로드"""
     if PROCESSED_LOG.exists():
-        with open(PROCESSED_LOG, 'r', encoding='utf-8') as f:
+        with open(PROCESSED_LOG, 'r', encoding='utf-8', errors='replace') as f:
             return json.load(f)
     return {"processed": [], "last_update": None}
 

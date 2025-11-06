@@ -82,8 +82,8 @@ class RAGPipeline:
         if not text_file:
             raise FileNotFoundError(f"텍스트 파일을 찾을 수 없습니다: {extracted_dir}")
         
-        # 텍스트 로드
-        with open(text_file, 'r', encoding='utf-8') as f:
+        # 텍스트 로드 (손상된 바이트 무시)
+        with open(text_file, 'r', encoding='utf-8', errors='replace') as f:
             text = f.read()
         
         # 구조 정보 로드 (있으면)
@@ -91,13 +91,13 @@ class RAGPipeline:
         metadata = {'doc_name': extracted_dir.stem.replace('extracted_', '')}
         
         if structure_file:
-            with open(structure_file, 'r', encoding='utf-8') as f:
+            with open(structure_file, 'r', encoding='utf-8', errors='replace') as f:
                 structure = json.load(f)
                 metadata['file_type'] = structure.get('file_type', 'unknown')
         
         # 표 데이터 로드 (있으면)
         for file in extracted_dir.glob("*표데이터*"):
-            with open(file, 'r', encoding='utf-8') as f:
+            with open(file, 'r', encoding='utf-8', errors='replace') as f:
                 tables = json.load(f)
             break
         

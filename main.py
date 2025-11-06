@@ -16,7 +16,8 @@ def setup_logging():
         config.LOG_FILE,
         rotation="10 MB",
         level=config.LOG_LEVEL,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+        encoding='utf-8'
     )
 
 
