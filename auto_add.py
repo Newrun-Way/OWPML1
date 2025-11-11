@@ -10,15 +10,16 @@
     python auto_add.py --source 경로        # 커스텀 소스 폴더 지정
 """
 
+# ⚠️ 환경변수는 모든 import 이전에 설정해야 함
+import os
+os.environ["ORT_LOGGING_LEVEL"] = "3"  # ONNX Runtime GPU 경고 비활성화
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # TensorFlow 경고 비활성화
+
 import argparse
 from pathlib import Path
 from rag.pipeline import RAGPipeline
 import json
 import time
-import os
-
-# ONNX Runtime GPU 경고 비활성화 (선택사항)
-os.environ["ORT_LOGGING_LEVEL"] = "3"  # 경고 수준 줄이기
 
 # 처리 기록 파일
 PROCESSED_LOG = Path("data/.processed_documents.json")
