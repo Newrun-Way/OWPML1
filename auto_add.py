@@ -2,9 +2,12 @@
 팀원이 전달한 추출 데이터를 자동으로 RAG 시스템에 추가하는 스크립트
 
 사용법:
-    python auto_add.py                    # data/extracted/ 폴더의 모든 새 문서 추가
-    python auto_add.py --all              # 모든 문서 재추가
-    python auto_add.py --folder 문서명    # 특정 문서만 추가
+    python auto_add.py                      # 새 문서만 추가 (기본)
+    python auto_add.py --all                # 모든 문서 재추가
+    python auto_add.py all                  # 모든 문서 재추가 (위와 동일)
+    python auto_add.py --folder 문서명      # 특정 문서만 추가
+    python auto_add.py 문서명               # 특정 문서만 추가 (위와 동일)
+    python auto_add.py --source 경로        # 커스텀 소스 폴더 지정
 """
 
 import argparse
@@ -12,6 +15,10 @@ from pathlib import Path
 from rag.pipeline import RAGPipeline
 import json
 import time
+import os
+
+# ONNX Runtime GPU 경고 비활성화 (선택사항)
+os.environ["ORT_LOGGING_LEVEL"] = "3"  # 경고 수준 줄이기
 
 # 처리 기록 파일
 PROCESSED_LOG = Path("data/.processed_documents.json")
@@ -61,11 +68,20 @@ def add_document_to_rag(pipeline, folder_path):
 
 def main():
     parser = argparse.ArgumentParser(description="추출된 문서를 RAG 시스템에 자동 추가")
+    # 위치 인자 (호환성: all 또는 --all 모두 지원)
+    parser.add_argument("action", nargs='?', default=None, 
+                       help="작업: 'all' (모든 문서 재추가), '폴더명' (특정 폴더)")
     parser.add_argument("--all", action="store_true", help="모든 문서 재추가")
     parser.add_argument("--folder", type=str, help="특정 폴더만 추가")
     parser.add_argument("--source", type=str, default="extracted_results", 
                        help="문서가 있는 폴더 경로 (기본: extracted_results)")
     args = parser.parse_args()
+    
+    # 호환성 처리: positional argument 'all' → args.all으로 변환
+    if args.action == "all":
+        args.all = True
+    elif args.action and not args.folder:
+        args.folder = args.action
     
     print("\n" + "="*70)
     print("RAG 자동 추가 시스템")
