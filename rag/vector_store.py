@@ -6,7 +6,6 @@ Chroma를 사용한 벡터 인덱싱 및 검색
 from typing import List, Tuple, Dict, Optional
 import numpy as np
 import chromadb
-from chromadb.config import Settings
 from pathlib import Path
 from langchain_core.documents import Document
 import config
@@ -30,14 +29,9 @@ class VectorStore:
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         
-        # Chroma 클라이언트 초기화 (영구 저장소)
-        settings = Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=str(self.persist_dir),
-            anonymized_telemetry=False
-        )
-        
-        self.client = chromadb.Client(settings)
+        # Chroma 클라이언트 초기화 (새로운 API)
+        # PersistentClient: 로컬 저장소를 사용하는 클라이언트
+        self.client = chromadb.PersistentClient(path=str(self.persist_dir))
         
         # 컬렉션 초기화 (기존에 있으면 로드, 없으면 생성)
         self.collection = self.client.get_or_create_collection(
