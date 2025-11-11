@@ -207,6 +207,16 @@ class VectorStore:
             'count': self.collection.count(),
             'metadata': self.collection.metadata if hasattr(self.collection, 'metadata') else {}
         }
+    
+    def save(self):
+        """벡터 저장소 저장 (Chroma는 자동으로 저장됨)"""
+        logger.info(f"Chroma 데이터 자동 저장 (persist_dir: {self.persist_dir})")
+    
+    @classmethod
+    def load(cls, persist_dir: Path = config.VECTOR_STORE_DIR):
+        """기존 벡터 저장소 로드"""
+        logger.info(f"Chroma 벡터 저장소 로드 중: {persist_dir}")
+        return cls(persist_dir=persist_dir)
 
 
 def test_vector_store():
