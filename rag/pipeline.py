@@ -47,13 +47,14 @@ class RAGPipeline:
         
         # 벡터 저장소 로드 또는 생성
         self.vector_store_dir = Path(vector_store_dir)
-        if load_existing and (self.vector_store_dir / "metadata.pkl").exists():
+        if load_existing:
             logger.info("기존 벡터 저장소 로드 중...")
             self.vector_store = VectorStore.load(self.vector_store_dir)
         else:
             logger.info("새 벡터 저장소 생성")
             self.vector_store = VectorStore(
-                embedding_dim=self.embedder.get_embedding_dim()
+                embedding_dim=self.embedder.get_embedding_dim(),
+                persist_dir=self.vector_store_dir
             )
         
         logger.info("RAG 파이프라인 초기화 완료")

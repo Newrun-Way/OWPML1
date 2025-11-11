@@ -46,8 +46,8 @@ SIMILARITY_THRESHOLD = 0.7  # 유사도 임계값
 # Reranker 설정
 USE_RERANKER = True  # Reranker 사용 여부
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"  # Reranker 모델
-RERANK_TOP_K = 10  # Reranker에 전달할 후보 문서 수 (TOP_K보다 크게)
-RERANK_THRESHOLD = 0.0  # Rerank 점수 임계값 (보통 -10~10 범위)
+RERANK_TOP_K = 10  # Reranker에 전달할 후보 문서 수 
+RERANK_THRESHOLD = 0.0  # Rerank 점수 임계값 (-10~10 범위)
 FINAL_TOP_K = 3  # 최종 반환 문서 수
 
 # 프롬프트 설정

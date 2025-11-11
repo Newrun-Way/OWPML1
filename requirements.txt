@@ -3,7 +3,9 @@
 
 # 임베딩 및 벡터 검색
 sentence-transformers==3.3.1
-faiss-cpu==1.9.0.post1
+chromadb==0.5.5
+# FAISS (레거시, 필요 시 사용)
+# faiss-cpu==1.9.0.post1
 # faiss-gpu==1.9.0.post1  # GPU 사용 시 주석 해제
 
 # LLM API
