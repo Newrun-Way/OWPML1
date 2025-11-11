@@ -10,7 +10,7 @@
    - 한글 문서 처리 파이프라인 설계: OWPML 파싱 → 청킹 → 임베딩 → 벡터DB
 
 2. **기술 스택 선정 및 제안**
-   - **임베딩 모델**: `text-embedding-3-small` (OpenAI) 또는 `multilingual-e5-large` (한국어 지원)
+   - **임베딩 모델**: `text-embedding-3-small` (OpenAI) 또는 'bge-m3` (한국어 지원)
    - **벡터 DB**: FAISS (로컬 개발) 또는 Pinecone/Weaviate (프로덕션)
    - **LLM**: GPT-4 또는 GPT-3.5-turbo (비용 고려)
    - **프레임워크**: LangChain 또는 LlamaIndex

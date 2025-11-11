@@ -3,11 +3,6 @@ RAG 시스템 메인 실행 파일
 CLI 인터페이스
 """
 
-# ⚠️ 환경변수는 모든 import 이전에 설정해야 함
-import os
-os.environ["ORT_LOGGING_LEVEL"] = "3"  # ONNX Runtime GPU 경고 비활성화
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # TensorFlow 경고 비활성화
-
 import argparse
 from pathlib import Path
 from loguru import logger
