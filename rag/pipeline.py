@@ -50,18 +50,6 @@ class RAGPipeline:
         if load_existing:
             logger.info("기존 벡터 저장소 로드 중...")
             self.vector_store = VectorStore.load(self.vector_store_dir)
-            
-            # Chroma 마이그레이션 안내
-            if self.vector_store.collection.count() == 0:
-                logger.warning("=" * 70)
-                logger.warning("⚠️  벡터 저장소가 비어있습니다!")
-                logger.warning("=" * 70)
-                logger.warning("FAISS → Chroma 마이그레이션 후, 기존 데이터가 손실되었을 수 있습니다.")
-                logger.warning("")
-                logger.warning("해결 방법:")
-                logger.warning("  1. python auto_add.py --all  (모든 문서 재추가)")
-                logger.warning("  2. 또는 python auto_add.py   (새 문서만 추가)")
-                logger.warning("=" * 70)
         else:
             logger.info("새 벡터 저장소 생성")
             self.vector_store = VectorStore(
@@ -130,8 +118,8 @@ class RAGPipeline:
         # 벡터 저장소에 추가
         self.vector_store.add_documents(chunks, embeddings)
         
-        # 저장
-        self.vector_store.save(self.vector_store_dir)
+        # 저장 (Chroma는 자동으로 저장됨)
+        self.vector_store.save()
         
         logger.info(f"문서 추가 완료: {len(chunks)}개 청크")
         
