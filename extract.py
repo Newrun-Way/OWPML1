@@ -18,11 +18,158 @@ import json
 import os
 import sys
 import io
+import re
 from pathlib import Path
 from jpype_setup import init_jpype
 
 # Windows에서 UTF-8 출력을 위한 설정
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+
+def analyze_document_structure(text_lines):
+    """
+    문서 텍스트에서 구조 정보 추출 (장/조/항)
+    
+    Args:
+        text_lines: 문서 텍스트 줄 리스트
+    
+    Returns:
+        dict: {
+            'chapters': [...],  # 장 정보
+            'articles': [...],  # 조 정보
+            'structure_map': {...}  # 줄 번호 → 구조 정보 매핑
+        }
+    """
+    structure = {
+        'chapters': [],
+        'articles': [],
+        'structure_map': {}  # line_idx -> structure_info
+    }
+    
+    current_chapter = None
+    current_article = None
+    
+    # 정규식 패턴
+    patterns = {
+        'chapter': re.compile(r'^제\s*(\d+)\s*장\s+(.+)$'),  # 제1장 총칙
+        'article': re.compile(r'^제\s*(\d+)\s*조\s*(?:\((.+?)\))?(.*)$'),  # 제5조 (급여의 계산)
+        'paragraph': re.compile(r'^([①②③④⑤⑥⑦⑧⑨⑩]|\d+\))\s*(.*)$'),  # ① 내용, 1) 내용
+        'subparagraph': re.compile(r'^([가나다라마바사아자차카타파하])\.\s+(.*)$')  # 가. 내용
+    }
+    
+    for line_idx, line in enumerate(text_lines):
+        line = line.strip()
+        if not line:
+            continue
+        
+        # 장(Chapter) 감지
+        chapter_match = patterns['chapter'].match(line)
+        if chapter_match:
+            chapter_num = chapter_match.group(1)
+            chapter_title = chapter_match.group(2).strip()
+            
+            current_chapter = {
+                'number': chapter_num,
+                'title': chapter_title,
+                'line_idx': line_idx,
+                'articles': []
+            }
+            structure['chapters'].append(current_chapter)
+            structure['structure_map'][line_idx] = {
+                'type': 'chapter',
+                'number': chapter_num,
+                'title': chapter_title
+            }
+            continue
+        
+        # 조(Article) 감지
+        article_match = patterns['article'].match(line)
+        if article_match:
+            article_num = article_match.group(1)
+            article_title = article_match.group(2).strip() if article_match.group(2) else ''
+            
+            current_article = {
+                'number': article_num,
+                'title': article_title,
+                'line_idx': line_idx,
+                'chapter_num': current_chapter['number'] if current_chapter else None,
+                'paragraphs': []
+            }
+            
+            if current_chapter:
+                current_chapter['articles'].append(current_article)
+            
+            structure['articles'].append(current_article)
+            structure['structure_map'][line_idx] = {
+                'type': 'article',
+                'number': article_num,
+                'title': article_title,
+                'chapter_num': current_chapter['number'] if current_chapter else None
+            }
+            continue
+        
+        # 항(Paragraph) 감지
+        para_match = patterns['paragraph'].match(line)
+        if para_match:
+            para_num = para_match.group(1)
+            
+            # 한글 숫자 변환
+            korean_numbers = {'①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5',
+                            '⑥': '6', '⑦': '7', '⑧': '8', '⑨': '9', '⑩': '10'}
+            para_num_normalized = korean_numbers.get(para_num, para_num.rstrip(')'))
+            
+            if current_article:
+                current_article['paragraphs'].append({
+                    'number': para_num_normalized,
+                    'line_idx': line_idx
+                })
+            
+            structure['structure_map'][line_idx] = {
+                'type': 'paragraph',
+                'number': para_num_normalized,
+                'article_num': current_article['number'] if current_article else None,
+                'chapter_num': current_chapter['number'] if current_chapter else None
+            }
+            continue
+        
+        # 호(Subparagraph) 감지
+        subpara_match = patterns['subparagraph'].match(line)
+        if subpara_match:
+            subpara_letter = subpara_match.group(1)
+            
+            structure['structure_map'][line_idx] = {
+                'type': 'subparagraph',
+                'letter': subpara_letter,
+                'article_num': current_article['number'] if current_article else None,
+                'chapter_num': current_chapter['number'] if current_chapter else None
+            }
+    
+    return structure
+
+
+def build_hierarchy_path(structure_info):
+    """
+    구조 정보로부터 계층 경로 생성
+    예: "제3장 급여의 지급 > 제15조 급여의 계산 > 제1항"
+    """
+    parts = []
+    
+    if structure_info.get('chapter_num'):
+        if structure_info.get('chapter_title'):
+            parts.append(f"제{structure_info['chapter_num']}장 {structure_info['chapter_title']}")
+        else:
+            parts.append(f"제{structure_info['chapter_num']}장")
+    
+    if structure_info.get('article_num'):
+        if structure_info.get('article_title'):
+            parts.append(f"제{structure_info['article_num']}조 {structure_info['article_title']}")
+        else:
+            parts.append(f"제{structure_info['article_num']}조")
+    
+    if structure_info.get('paragraph_num'):
+        parts.append(f"제{structure_info['paragraph_num']}항")
+    
+    return " > ".join(parts) if parts else ""
 
 
 def extract_hwpx_with_structure(hwpx_path, output_dir="extracted_data"):
@@ -212,7 +359,13 @@ def save_results(result, output_dir="extracted_data"):
                     f.write(" | ".join(row) + "\n")
                 f.write("\n")
     
-    # 3. 구조화된 데이터 저장 (JSON)
+    # 3. 문서 구조 분석 및 저장
+    # 전체 텍스트를 줄 단위로 분리하여 구조 분석
+    full_text = '\n\n'.join(result["text_content"])
+    text_lines = full_text.split('\n')
+    doc_structure = analyze_document_structure(text_lines)
+    
+    # 구조 정보 저장
     structure_json = os.path.join(output_dir, f"{base_name}_구조.json")
     save_result = {
         "file_type": result["file_type"],
@@ -220,7 +373,14 @@ def save_results(result, output_dir="extracted_data"):
         "tables_count": len(result["tables"]),
         "images_count": len(result["images"]),
         "images_list": [img["filename"] for img in result["images"]],
-        "metadata": result["metadata"]
+        "metadata": result["metadata"],
+        # 문서 구조 정보 추가
+        "document_structure": {
+            "chapters": doc_structure['chapters'],
+            "articles": doc_structure['articles'],
+            "total_chapters": len(doc_structure['chapters']),
+            "total_articles": len(doc_structure['articles'])
+        }
     }
     with open(structure_json, 'w', encoding='utf-8') as f:
         json.dump(save_result, f, ensure_ascii=False, indent=2)
@@ -236,6 +396,25 @@ def save_results(result, output_dir="extracted_data"):
         f.write(f"단락 수: {len(result['paragraphs'])}개\n")
         f.write(f"표 개수: {len(result['tables'])}개\n")
         f.write(f"이미지 개수: {len(result['images'])}개\n\n")
+        
+        # 문서 구조 정보 추가
+        f.write(f"[문서 구조 정보]\n")
+        f.write(f"장(Chapter) 수: {len(doc_structure['chapters'])}개\n")
+        f.write(f"조(Article) 수: {len(doc_structure['articles'])}개\n")
+        
+        if doc_structure['chapters']:
+            f.write(f"\n[장 목록]\n")
+            for ch in doc_structure['chapters']:
+                f.write(f"  제{ch['number']}장: {ch['title']}\n")
+        
+        if doc_structure['articles']:
+            f.write(f"\n[조 목록 (일부)]\n")
+            for art in doc_structure['articles'][:10]:  # 처음 10개만
+                title = f"({art['title']})" if art['title'] else ""
+                f.write(f"  제{art['number']}조 {title}\n")
+            if len(doc_structure['articles']) > 10:
+                f.write(f"  ... 외 {len(doc_structure['articles']) - 10}개\n")
+        f.write("\n")
         
         if result["file_type"] == "HWP":
             f.write("[참고] HWP 파일은 텍스트만 추출됩니다.\n")

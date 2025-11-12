@@ -92,3 +92,90 @@ LOG_LEVEL = "INFO"
 LOG_FILE = PROJECT_ROOT / "logs" / "rag_system.log"
 LOG_FILE.parent.mkdir(exist_ok=True)
 
+# ============================================================
+# 메타데이터 스키마 정의
+# ============================================================
+
+# 문서 레벨 메타데이터 (Document-level metadata)
+DOCUMENT_METADATA_SCHEMA = {
+    # 필수 필드
+    "doc_id": "str",                  # 문서 고유 ID (예: doc_인사규정)
+    "doc_name": "str",                # 문서명 (예: 인사규정)
+    "source": "str",                  # 문서 원본 경로
+    "file_type": "str",               # 파일 형식 (HWP, HWPX)
+    
+    # 사용자 입력 메타데이터 (프론트엔드에서 업로드 시 입력)
+    "user_id": "str",                 # 업로드한 사용자 ID
+    "dept_id": "str",                 # 부서 ID
+    "project_id": "str",              # 프로젝트 ID
+    
+    # 문서 관리 메타데이터
+    "category": "str",                # 카테고리 (예: 인사, 회계, 감사)
+    "version": "str",                 # 버전 (예: v1.0, 2024년 개정)
+    "upload_date": "str",             # 업로드 일시 (ISO 8601)
+    
+    # 문서 구조 통계
+    "total_chapters": "int",          # 총 장(章) 수
+    "total_articles": "int",          # 총 조(條) 수
+}
+
+# 청크 레벨 메타데이터 (Chunk-level metadata)
+CHUNK_METADATA_SCHEMA = {
+    # 청크 기본 정보
+    "chunk_id": "int",                # 청크 ID (문서 내 순번)
+    "chunk_index": "int",             # 청크 인덱스 (0부터 시작)
+    "chunk_size": "int",              # 청크 크기 (문자 수)
+    
+    # 문서 구조 정보 (자동 추출)
+    "chapter_number": "str",          # 장 번호 (예: "3")
+    "chapter_title": "str",           # 장 제목 (예: "급여의 지급")
+    "article_number": "str",          # 조 번호 (예: "15")
+    "article_title": "str",           # 조 제목 (예: "급여의 계산")
+    "paragraph_number": "str",        # 항 번호 (예: "1", "2")
+    "hierarchy_path": "str",          # 계층 경로 (예: "제3장 급여의 지급 > 제15조 (급여의 계산)")
+    
+    # 문서 레벨 메타데이터 상속
+    **DOCUMENT_METADATA_SCHEMA
+}
+
+# ChromaDB 메타데이터 필터링 예시
+METADATA_FILTER_EXAMPLES = {
+    # 특정 부서 문서만 검색
+    "dept_filter": {
+        "dept_id": "HR"
+    },
+    
+    # 특정 프로젝트 + 카테고리 문서 검색
+    "project_category_filter": {
+        "$and": [
+            {"project_id": "proj_2024_001"},
+            {"category": "인사"}
+        ]
+    },
+    
+    # 특정 장(章)의 내용만 검색
+    "chapter_filter": {
+        "chapter_number": "3"
+    },
+    
+    # 특정 조(條)의 내용만 검색
+    "article_filter": {
+        "article_number": "15"
+    },
+    
+    # 복합 필터: 특정 부서 + 특정 장
+    "complex_filter": {
+        "$and": [
+            {"dept_id": "HR"},
+            {"chapter_number": "3"}
+        ]
+    }
+}
+
+# 메타데이터 검증 규칙
+METADATA_VALIDATION_RULES = {
+    "required_fields": ["doc_id", "doc_name", "source"],
+    "optional_fields": ["user_id", "dept_id", "project_id", "category", "version"],
+    "auto_extracted_fields": ["chapter_number", "chapter_title", "article_number", "article_title", "hierarchy_path"]
+}
+

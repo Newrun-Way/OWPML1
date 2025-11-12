@@ -115,27 +115,44 @@ class LLMGenerator:
             content = ctx['content']
             metadata = ctx.get('metadata', {})
             doc_name = metadata.get('doc_name', '알 수 없음')
+            hierarchy_path = metadata.get('hierarchy_path', '')
             
-            context_parts.append(
-                f"[문서 {i+1}: {doc_name}]\n{content}"
-            )
+            # 구조 정보가 있으면 포함
+            doc_header = f"[문서 {i+1}: {doc_name}]"
+            if hierarchy_path:
+                doc_header += f"\n[위치: {hierarchy_path}]"
+            
+            context_parts.append(f"{doc_header}\n{content}")
         
         context_str = "\n\n".join(context_parts)
         
         # 답변 생성
         answer = self.generate(context_str, question)
         
-        # 출처 정보 구성
+        # 출처 정보 구성 (구조 메타데이터 포함)
         sources = []
         for i, ctx in enumerate(contexts):
             metadata = ctx.get('metadata', {})
-            sources.append({
+            source_info = {
                 'index': i + 1,
                 'doc_name': metadata.get('doc_name', '알 수 없음'),
+                'doc_id': metadata.get('doc_id', ''),
                 'chunk_id': metadata.get('chunk_id', -1),
+                'chunk_index': metadata.get('chunk_index', -1),
                 'score': ctx.get('score', 0.0),
-                'content': ctx['content'][:200] + "..."  # 일부만 포함
-            })
+                'content_preview': ctx['content'][:200] + "...",  # 일부만 포함
+                # 문서 구조 정보
+                'chapter_number': metadata.get('chapter_number', ''),
+                'chapter_title': metadata.get('chapter_title', ''),
+                'article_number': metadata.get('article_number', ''),
+                'article_title': metadata.get('article_title', ''),
+                'hierarchy_path': metadata.get('hierarchy_path', ''),
+                # 사용자/프로젝트 정보 (향후 프론트엔드에서 입력)
+                'user_id': metadata.get('user_id', ''),
+                'dept_id': metadata.get('dept_id', ''),
+                'project_id': metadata.get('project_id', '')
+            }
+            sources.append(source_info)
         
         return {
             'answer': answer,

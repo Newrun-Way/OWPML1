@@ -89,12 +89,37 @@ class RAGPipeline:
         
         # 구조 정보 로드 (있으면)
         tables = []
-        metadata = {'doc_name': extracted_dir.stem.replace('extracted_', '')}
+        doc_name = extracted_dir.stem.replace('extracted_', '')
         
+        # 기본 메타데이터 설정
+        metadata = {
+            'doc_name': doc_name,
+            'doc_id': f"doc_{doc_name}",  # 문서 고유 ID
+            'source': str(extracted_dir),
+            'file_type': 'unknown',
+            # 사용자 입력 메타데이터 (추후 프론트엔드에서 전달받을 예정)
+            'user_id': '',
+            'dept_id': '',
+            'project_id': '',
+            # 문서 구조 정보
+            'total_chapters': 0,
+            'total_articles': 0,
+            # 문서 관리 정보
+            'category': '',
+            'version': '',
+            'upload_date': ''
+        }
+        
+        # 구조 파일이 있으면 추가 정보 로드
         if structure_file:
             with open(structure_file, 'r', encoding='utf-8', errors='replace') as f:
                 structure = json.load(f)
                 metadata['file_type'] = structure.get('file_type', 'unknown')
+                
+                # 문서 구조 정보
+                doc_structure = structure.get('document_structure', {})
+                metadata['total_chapters'] = doc_structure.get('total_chapters', 0)
+                metadata['total_articles'] = doc_structure.get('total_articles', 0)
         
         # 표 데이터 로드 (있으면)
         for file in extracted_dir.glob("*표데이터*"):

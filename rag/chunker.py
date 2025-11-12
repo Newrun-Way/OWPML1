@@ -1,10 +1,11 @@
 
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 import config
 from loguru import logger
+import re
 
 
 class DocumentChunker:
@@ -35,6 +36,77 @@ class DocumentChunker:
         
         logger.info(f"DocumentChunker 초기화: chunk_size={chunk_size}, overlap={chunk_overlap}")
     
+    def _find_structure_context(self, text: str, chunk_start: int, chunk_end: int) -> Dict:
+        """
+        청크의 위치를 기반으로 해당 청크가 속한 문서 구조 찾기
+        
+        Args:
+            text: 전체 문서 텍스트
+            chunk_start: 청크 시작 위치
+            chunk_end: 청크 끝 위치
+        
+        Returns:
+            구조 메타데이터 dict
+        """
+        # 청크 앞부분의 텍스트에서 가장 가까운 장/조 찾기
+        text_before = text[:chunk_start]
+        
+        # 패턴 정의
+        chapter_pattern = re.compile(r'제\s*(\d+)\s*장\s+(.+)')
+        article_pattern = re.compile(r'제\s*(\d+)\s*조\s*(?:\((.+?)\))?')
+        
+        # 역순으로 검색 (가장 가까운 것 찾기)
+        lines_before = text_before.split('\n')
+        
+        current_chapter = None
+        current_chapter_title = ""
+        current_article = None
+        current_article_title = ""
+        
+        # 뒤에서부터 검색
+        for line in reversed(lines_before):
+            line = line.strip()
+            
+            # 조 찾기
+            if current_article is None:
+                article_match = article_pattern.search(line)
+                if article_match:
+                    current_article = article_match.group(1)
+                    current_article_title = article_match.group(2) if article_match.group(2) else ""
+            
+            # 장 찾기
+            if current_chapter is None:
+                chapter_match = chapter_pattern.search(line)
+                if chapter_match:
+                    current_chapter = chapter_match.group(1)
+                    current_chapter_title = chapter_match.group(2).strip()
+            
+            # 둘 다 찾으면 중단
+            if current_chapter and current_article:
+                break
+        
+        # 계층 경로 생성
+        hierarchy_parts = []
+        if current_chapter:
+            if current_chapter_title:
+                hierarchy_parts.append(f"제{current_chapter}장 {current_chapter_title}")
+            else:
+                hierarchy_parts.append(f"제{current_chapter}장")
+        
+        if current_article:
+            if current_article_title:
+                hierarchy_parts.append(f"제{current_article}조 ({current_article_title})")
+            else:
+                hierarchy_parts.append(f"제{current_article}조")
+        
+        return {
+            'chapter_number': current_chapter or "",
+            'chapter_title': current_chapter_title,
+            'article_number': current_article or "",
+            'article_title': current_article_title,
+            'hierarchy_path': " > ".join(hierarchy_parts) if hierarchy_parts else ""
+        }
+    
     def chunk_text(
         self,
         text: str,
@@ -64,10 +136,33 @@ class DocumentChunker:
             metadatas=[metadata]
         )
         
-        # 청크 ID 추가
+        # 각 청크에 구조 메타데이터 추가
+        current_pos = 0
         for i, chunk in enumerate(chunks):
+            # 청크의 텍스트 위치 찾기
+            chunk_text = chunk.page_content
+            chunk_start = text.find(chunk_text, current_pos)
+            chunk_end = chunk_start + len(chunk_text) if chunk_start != -1 else current_pos
+            
+            # 기본 청크 메타데이터
             chunk.metadata['chunk_id'] = i
-            chunk.metadata['chunk_size'] = len(chunk.page_content)
+            chunk.metadata['chunk_index'] = i
+            chunk.metadata['chunk_size'] = len(chunk_text)
+            
+            # 문서 구조 메타데이터 추가
+            if chunk_start != -1:
+                structure_context = self._find_structure_context(text, chunk_start, chunk_end)
+                chunk.metadata.update(structure_context)
+                current_pos = chunk_end
+            else:
+                # 위치를 찾지 못한 경우 빈 구조 정보
+                chunk.metadata.update({
+                    'chapter_number': "",
+                    'chapter_title': "",
+                    'article_number': "",
+                    'article_title': "",
+                    'hierarchy_path': ""
+                })
         
         logger.info(f"텍스트 청킹 완료: {len(chunks)}개 청크 생성")
         return chunks
