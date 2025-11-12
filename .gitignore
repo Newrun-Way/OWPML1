@@ -50,3 +50,7 @@ data/
 logs/
 extracted_results/
 
+# 테스트 파일
+test_metadata.py
+test_search_with_filters.py
+
