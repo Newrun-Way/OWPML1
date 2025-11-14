@@ -323,14 +323,3 @@ docker run -d -e OPENAI_API_KEY=sk-... owpml-rag-rag
 - **원인**: NVIDIA 드라이버 환경 차이
 - **해결책**: `ORT_LOGGING_LEVEL=3` 설정으로 경고 억제 (실제로는 PyTorch가 GPU 사용 중)
 
-## 📝 라이선스
-
-프로젝트별 내부 정책 참고
-
-## 🎯 다음 단계
-
-- [ ] 프론트엔드 UI 개발 (메타데이터 입력 폼)
-- [ ] 백엔드 API 서버화 (Flask/FastAPI)
-- [ ] 메타데이터 세분화 최적화
-- [ ] 성능 모니터링 대시보드
-- [ ] 다국어 지원 (영어, 중국어)
