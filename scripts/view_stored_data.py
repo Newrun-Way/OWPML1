@@ -1,64 +1,84 @@
 """
-저장된 RAG 데이터 조회 스크립트
+저장된 RAG 데이터 조회 스크립트 (ChromaDB 버전)
 """
-import pickle
+
+import sys
 from pathlib import Path
 
-metadata_path = Path("data/vector_store/metadata.pkl")
+# 프로젝트 루트 경로 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-if metadata_path.exists():
-    with open(metadata_path, 'rb') as f:
-        data = pickle.load(f)
-    
-    print("\n" + "="*70)
-    print("RAG 시스템에 저장된 데이터")
-    print("="*70)
-    
-    print(f"\n[시스템 정보]")
-    print(f"  임베딩 차원: {data.get('embedding_dim', 'N/A')}")
-    print(f"  인덱스 타입: {data.get('index_type', 'N/A')}")
-    print(f"  총 청크 수: {len(data.get('documents', []))}")
-    
-    documents = data.get('documents', [])
-    
-    print(f"\n[문서 목록]")
-    doc_names = {}
-    for doc in documents:
-        meta = doc.metadata
-        doc_name = meta.get('doc_name', 'Unknown')
-        if doc_name not in doc_names:
-            doc_names[doc_name] = []
-        doc_names[doc_name].append(meta.get('chunk_id', -1))
-    
-    for i, (doc_name, chunk_ids) in enumerate(doc_names.items(), 1):
-        print(f"  {i}. {doc_name}")
-        print(f"     - 청크 수: {len(chunk_ids)}개")
-        print(f"     - 청크 ID: {sorted(chunk_ids)}")
-    
-    print(f"\n[청크 상세 정보]")
-    for doc in documents:
-        meta = doc.metadata
-        print(f"\n  청크 {meta.get('chunk_id', '?')}: {meta.get('doc_name', 'Unknown')}")
-        print(f"    - 파일 타입: {meta.get('file_type', 'N/A')}")
-        print(f"    - 청크 크기: {meta.get('chunk_size', 'N/A')}자")
-        print(f"    - 내용 미리보기:")
-        content = doc.page_content[:200].replace('\n', ' ')
-        print(f"      {content}...")
-    
-    print("\n" + "="*70)
-    
-    # 파일 크기 정보
-    faiss_path = Path("data/vector_store/faiss_index.bin")
-    if faiss_path.exists():
-        faiss_size = faiss_path.stat().st_size
-        print(f"\n[저장 파일 정보]")
-        print(f"  faiss_index.bin: {faiss_size:,} bytes ({faiss_size/1024:.1f} KB)")
-        print(f"  metadata.pkl: {metadata_path.stat().st_size:,} bytes ({metadata_path.stat().st_size/1024:.1f} KB)")
-        print(f"  총 크기: {(faiss_size + metadata_path.stat().st_size)/1024:.1f} KB")
-    
-    print("\n" + "="*70)
+from rag.vector_store import VectorStore
+import config
 
-else:
-    print("\n⚠ 저장된 데이터가 없습니다.")
-    print("먼저 'python main.py add' 또는 'python test_rag.py'를 실행하세요.")
 
+def main():
+    """저장된 벡터 저장소 데이터 조회"""
+    
+    try:
+        # 벡터 저장소 로드
+        vs = VectorStore.load(persist_dir=config.VECTOR_STORE_DIR)
+        
+        print("\n" + "="*70)
+        print("ChromaDB 벡터 저장소에 저장된 데이터")
+        print("="*70)
+        
+        # 기본 정보
+        stats = vs.get_stats()
+        collection_info = vs.get_collection_info()
+        
+        print(f"\n[시스템 정보]")
+        print(f"  벡터 저장소 타입: {stats['vector_store_type']}")
+        print(f"  임베딩 차원: {stats['embedding_dim']}")
+        print(f"  총 청크 수: {stats['total_documents']}")
+        
+        print(f"\n[컬렉션 정보]")
+        print(f"  컬렉션명: {collection_info['name']}")
+        print(f"  문서 수: {collection_info['count']}")
+        print(f"  메타데이터: {collection_info['metadata']}")
+        
+        # 저장된 문서 샘플 조회
+        print(f"\n[저장된 문서 샘플 (최대 10개)]")
+        
+        all_docs = vs.collection.get(limit=10)
+        
+        if all_docs['documents']:
+            for i, doc_text in enumerate(all_docs['documents'], 1):
+                metadata = all_docs['metadatas'][i-1] if all_docs['metadatas'] else {}
+                
+                print(f"\n  {i}. 청크 ID: {all_docs['ids'][i-1]}")
+                if metadata:
+                    print(f"     메타데이터:")
+                    for key, value in metadata.items():
+                        print(f"       - {key}: {value}")
+                
+                # 내용 미리보기 (첫 100자)
+                preview = doc_text[:100].replace('\n', ' ')
+                print(f"     내용 미리보기: {preview}...")
+        else:
+            print("  데이터가 없습니다.")
+        
+        # 저장소 경로 정보
+        print(f"\n[저장소 정보]")
+        vector_store_path = Path(config.VECTOR_STORE_DIR)
+        if vector_store_path.exists():
+            import os
+            total_size = 0
+            for dirpath, dirnames, filenames in os.walk(vector_store_path):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    total_size += os.path.getsize(filepath)
+            
+            print(f"  저장소 위치: {vector_store_path}")
+            print(f"  총 크기: {total_size / (1024*1024):.2f} MB")
+            print(f"  파일 수: {len([f for f in vector_store_path.rglob('*') if f.is_file()])}")
+        
+        print("\n" + "="*70)
+        
+    except Exception as e:
+        print(f"\n❌ 오류 발생: {e}")
+        print("\n먼저 'python3 auto_add.py --all'로 문서를 추가하세요.")
+
+
+if __name__ == "__main__":
+    main()
