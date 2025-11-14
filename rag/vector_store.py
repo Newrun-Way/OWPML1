@@ -145,36 +145,29 @@ class VectorStore:
         logger.info(f"검색 완료: {len(output)}개 문서 반환")
         return output
     
-    def save(self, save_dir: Optional[Path] = None):
-        """
-        데이터 저장 (Chroma는 자동 저장, 이 메서드는 명시적 저장용)
-        
-        Args:
-            save_dir: 저장 디렉토리 (생략 시 초기화 시 설정한 디렉토리)
-        """
-        # Chroma는 자동으로 persist_directory에 저장하므로
-        # 명시적 저장은 필요 없음. 로그만 출력
-        logger.info(f"Chroma 데이터 저장 (자동 영구 저장): {self.persist_dir}")
+    def save(self):
+        """벡터 저장소 저장 (Chroma는 자동으로 저장됨)"""
+        logger.info(f"Chroma 데이터 자동 저장 (persist_dir: {self.persist_dir})")
     
     @classmethod
-    def load(cls, load_dir: Path = config.VECTOR_STORE_DIR):
+    def load(cls, persist_dir: Path = config.VECTOR_STORE_DIR):
         """
         저장된 컬렉션과 메타데이터 로드
         
         Args:
-            load_dir: 로드 디렉토리
+            persist_dir: 로드 디렉토리
         
         Returns:
             VectorStore 인스턴스
         """
-        load_dir = Path(load_dir)
+        persist_dir = Path(persist_dir)
         
-        if not load_dir.exists():
-            logger.warning(f"벡터 저장소 디렉토리가 없습니다: {load_dir}")
-            return cls(persist_dir=load_dir)
+        if not persist_dir.exists():
+            logger.warning(f"벡터 저장소 디렉토리가 없습니다: {persist_dir}")
+            return cls(persist_dir=persist_dir)
         
-        logger.info(f"벡터 저장소 로드 중: {load_dir}")
-        store = cls(persist_dir=load_dir)
+        logger.info(f"벡터 저장소 로드 중: {persist_dir}")
+        store = cls(persist_dir=persist_dir)
         logger.info(f"벡터 저장소 로드 완료: {store.collection.count()}개 문서")
         
         return store
@@ -201,16 +194,6 @@ class VectorStore:
             'count': self.collection.count(),
             'metadata': self.collection.metadata if hasattr(self.collection, 'metadata') else {}
         }
-    
-    def save(self):
-        """벡터 저장소 저장 (Chroma는 자동으로 저장됨)"""
-        logger.info(f"Chroma 데이터 자동 저장 (persist_dir: {self.persist_dir})")
-    
-    @classmethod
-    def load(cls, persist_dir: Path = config.VECTOR_STORE_DIR):
-        """기존 벡터 저장소 로드"""
-        logger.info(f"Chroma 벡터 저장소 로드 중: {persist_dir}")
-        return cls(persist_dir=persist_dir)
 
 
 def test_vector_store():
