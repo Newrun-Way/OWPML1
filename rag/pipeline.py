@@ -131,6 +131,16 @@ class RAGPipeline:
         logger.info(f"  텍스트 길이: {len(text)} 글자")
         logger.info(f"  표 개수: {len(tables)}개")
         
+        # 문서 요약 생성
+        logger.info("문서 요약 생성 중...")
+        try:
+            summary = self.llm.summarize_document(text)
+            metadata['summary'] = summary
+            logger.info(f"요약: {summary}")
+        except Exception as e:
+            logger.warning(f"요약 생성 실패: {e}")
+            metadata['summary'] = ""
+        
         # 청킹
         if tables:
             chunks = self.chunker.chunk_with_tables(text, tables, metadata)

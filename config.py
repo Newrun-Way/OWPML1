@@ -32,7 +32,11 @@ MAX_SEQ_LENGTH = 8192
 # LLM 설정
 LLM_MODEL = "gpt-4o-mini"
 LLM_TEMPERATURE = 0.7
-LLM_MAX_TOKENS = 1024
+LLM_MAX_TOKENS = 2000
+
+# 문서 요약 설정
+SUMMARY_MAX_TOKENS = 200  # 요약 생성 최대 토큰
+SUMMARY_TEMPERATURE = 0.5  # 요약은 일관성을 위해 낮은 온도 사용
 
 # 청킹 설정
 CHUNK_SIZE = 800  # 토큰
@@ -89,6 +93,20 @@ USER_PROMPT_TEMPLATE = """다음 문서를 참고하여 질문에 답해주세�
 - 출처 문서명 반드시 명시
 """
 
+# 문서 요약 프롬프트
+SUMMARY_PROMPT_TEMPLATE = """다음 문서의 내용을 3-4줄로 간단히 요약해주세요.
+
+[문서 내용]
+{document_text}
+
+[요청사항]
+- 3-4줄 이내로 간결하게 작성
+- 문서의 주요 목적과 핵심 내용 포함
+- 한국어로 작성
+- 전문용어는 간단하게 설명
+- 핵심만 담아내고 불필요한 세부사항 제외
+"""
+
 # 로깅 설정
 LOG_LEVEL = "INFO"
 LOG_FILE = PROJECT_ROOT / "logs" / "rag_system.log"
@@ -115,6 +133,9 @@ DOCUMENT_METADATA_SCHEMA = {
     "category": "str",                # 카테고리 (예: 인사, 회계, 감사)
     "version": "str",                 # 버전 (예: v1.0, 2024년 개정)
     "upload_date": "str",             # 업로드 일시 (ISO 8601)
+    
+    # 자동 생성 메타데이터
+    "summary": "str",                 # 문서 요약 (자동 생성, 3-4줄)
     
     # 문서 구조 통계
     "total_chapters": "int",          # 총 장 수

@@ -90,6 +90,101 @@ class LLMGenerator:
             logger.error(f"답변 생성 실패: {e}")
             return f"답변 생성 중 오류가 발생했습니다: {str(e)}"
     
+    def summarize_document(
+        self,
+        document_text: str,
+        max_tokens: int = None
+    ) -> str:
+        if max_tokens is None:
+            max_tokens = config.SUMMARY_MAX_TOKENS
+        
+        # 문서 길이 제한 (토큰 절약)
+        truncated_text = document_text[:2000] if len(document_text) > 2000 else document_text
+        
+        # 요약 프롬프트 구성
+        summary_prompt = config.SUMMARY_PROMPT_TEMPLATE.format(
+            document_text=truncated_text
+        )
+        
+        logger.info(f"문서 요약 생성 중...")
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "user", "content": summary_prompt}
+                ],
+                temperature=config.SUMMARY_TEMPERATURE,
+                max_tokens=max_tokens
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            
+            # 사용량 로깅
+            usage = response.usage
+            logger.info(
+                f"요약 생성 완료: "
+                f"input={usage.prompt_tokens} tokens, "
+                f"output={usage.completion_tokens} tokens"
+            )
+            
+            return summary
+        
+        except Exception as e:
+            logger.error(f"요약 생성 실패: {e}")
+            return ""
+    
+    def summarize_from_parsed_json(
+        self,
+        parsed_data: Dict,
+        max_tokens: int = None
+    ) -> Dict:
+        """
+        파싱된 JSON 데이터에서 텍스트를 추출해 요약 생성 후 JSON에 추가
+    
+          parsed_data: 파싱된 문서 JSON
+                {
+                    "doc_id": "doc_XXX",
+                    "doc_name": "문서명",
+                    "text_content": "전체 텍스트 내용",
+                    "metadata": {...}
+                }
+            max_tokens: 최대 토큰 수 (기본값: config.SUMMARY_MAX_TOKENS)
+        
+        Returns:
+            요약이 추가된 JSON
+                {
+                    "doc_id": "doc_XXX",
+                    "doc_name": "문서명",
+                    "text_content": "전체 텍스트 내용",
+                    "metadata": {...},
+                    "summary": "LLM이 생성한 3-4줄 요약"  ← 추가됨
+                }
+        """
+        if max_tokens is None:
+            max_tokens = config.SUMMARY_MAX_TOKENS
+        
+        # JSON에서 텍스트 추출
+        text_content = parsed_data.get("text_content", "")
+        
+        if not text_content:
+            logger.warning("parsed_data에 text_content가 없습니다")
+            parsed_data["summary"] = ""
+            return parsed_data
+        
+        logger.info(f"파싱된 JSON에서 요약 생성 중: {parsed_data.get('doc_name', 'Unknown')}")
+        
+        # 요약 생성
+        summary = self.summarize_document(text_content, max_tokens)
+        
+        # 응답 JSON에 summary 필드 추가
+        response = parsed_data.copy()
+        response["summary"] = summary
+        
+        logger.info(f"요약이 JSON에 추가됨: {len(summary)} 글자")
+        
+        return response
+    
     def generate_with_sources(
         self,
         contexts: List[Dict],
