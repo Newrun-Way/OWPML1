@@ -29,7 +29,7 @@ services:
       target: base
     container_name: rag-api
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
