@@ -57,6 +57,11 @@ services:
         limits:
           cpus: '2'
           memory: 2G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ========================================
   # Celery Worker (문서 처리)
