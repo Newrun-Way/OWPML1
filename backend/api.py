@@ -408,7 +408,7 @@ async def root():
     }
 
 
-@app.get("/docs", redirect_slashes=True)
+@app.get("/docs")
 async def get_docs():
     """API 문서"""
     return {
