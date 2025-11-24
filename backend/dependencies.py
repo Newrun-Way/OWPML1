@@ -23,7 +23,7 @@ _rag_instance: Optional[RAGPipeline] = None
 
 def get_rag_pipeline() -> RAGPipeline:
     """
-    RAG 파이프라인 인스턴스 반환 (싱글톤 패턴)
+    RAG 파이프라인 인스턴스 반환 
     
     Returns:
         RAGPipeline: RAG 파이프라인 인스턴스

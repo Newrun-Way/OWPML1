@@ -116,7 +116,7 @@ LOG_FILE.parent.mkdir(exist_ok=True)
 # 메타데이터 스키마 정의
 # ============================================================
 
-# 문서 레벨 메타데이터 (Document-level metadata)
+# 문서 레벨 메타데이터 
 DOCUMENT_METADATA_SCHEMA = {
     # 필수 필드
     "doc_id": "str",                  # 문서 고유 ID (예: doc_인사규정)
@@ -142,7 +142,7 @@ DOCUMENT_METADATA_SCHEMA = {
     "total_articles": "int",          # 총 조 수
 }
 
-# 청크 레벨 메타데이터 (Chunk-level metadata)
+# 청크 레벨 메타데이터 
 CHUNK_METADATA_SCHEMA = {
     # 청크 기본 정보
     "chunk_id": "int",                # 청크 ID (문서 내 순번)

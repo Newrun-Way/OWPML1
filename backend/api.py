@@ -190,15 +190,7 @@ async def upload_document_async(
 
 @app.get("/api/tasks/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str):
-    """
-    비동기 작업 상태 조회
-    
-    Args:
-        task_id: Celery Task ID
-        
-    Returns:
-        작업 상태 정보
-    """
+ 
     logger.info(f"작업 상태 조회: {task_id}")
     
     try:
