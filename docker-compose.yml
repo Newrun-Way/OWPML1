@@ -1,0 +1,151 @@
+services:
+  # ========================================
+  # Redis (메시지 브로커)
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ========================================
+  # FastAPI (API 서버)
+  # ========================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    container_name: rag-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./extracted_results:/app/extracted_results
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-network
+    command: python backend/run_api.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # ========================================
+  # Celery Worker (문서 처리)
+  # ========================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./extracted_results:/app/extracted_results
+      - ./hwp_data:/app/hwp_data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-network
+    command: python backend/run_worker.py
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ========================================
+  # Celery Flower (모니터링, 선택사항)
+  # ========================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    container_name: rag-flower
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - rag-network
+    command: celery -A backend.celery_config flower --port=5555
+    restart: unless-stopped
+
+  # ========================================
+  # Nginx (Reverse Proxy, 선택사항)
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: rag-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+# ========================================
+# 볼륨
+# ========================================
+volumes:
+  redis_data:
+    driver: local
+
+# ========================================
+# 네트워크
+# ========================================
+networks:
+  rag-network:
+    driver: bridge
+
