@@ -30,16 +30,22 @@ services:
     container_name: rag-api
     ports:
       - "8001:8000"
+    shm_size: "2g"
+    ipc: host
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - PYTHONUNBUFFERED=1
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+      - HF_HOME=/root/.cache/huggingface
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128,expandable_segments:True
     env_file:
       - .env
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./extracted_results:/app/extracted_results
+      - ~/.cache/huggingface:/root/.cache/huggingface
     depends_on:
       redis:
         condition: service_healthy
@@ -48,9 +54,10 @@ services:
     command: python backend/run_api.py
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 60s
+      timeout: 30s
+      retries: 10
+      start_period: 300s
     restart: unless-stopped
     deploy:
       resources:
@@ -71,10 +78,15 @@ services:
       context: .
       dockerfile: Dockerfile
       target: base
+    shm_size: "4g"
+    ipc: host
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - PYTHONUNBUFFERED=1
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+      - HF_HOME=/root/.cache/huggingface
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256,expandable_segments:True
     env_file:
       - .env
     volumes:
@@ -82,6 +94,7 @@ services:
       - ./logs:/app/logs
       - ./extracted_results:/app/extracted_results
       - ./hwp_data:/app/hwp_data
+      - ~/.cache/huggingface:/root/.cache/huggingface
     depends_on:
       redis:
         condition: service_healthy
