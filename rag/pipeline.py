@@ -11,10 +11,12 @@ import config
 from loguru import logger
 
 from rag.chunker import DocumentChunker
+from rag.structure_chunker import StructureAwareChunker
 from rag.embedder import DocumentEmbedder
 from rag.vector_store import VectorStore
 from rag.llm import LLMGenerator
 from rag.reranker import DocumentReranker
+from rag.table_processor import TableProcessor
 
 
 class RAGPipeline:
@@ -23,19 +25,29 @@ class RAGPipeline:
     def __init__(
         self,
         load_existing: bool = True,
-        vector_store_dir: Path = config.VECTOR_STORE_DIR
+        vector_store_dir: Path = config.VECTOR_STORE_DIR,
+        use_structure_chunking: bool = True
     ):
         """
         Args:
             load_existing: 기존 벡터 저장소 로드 여부
             vector_store_dir: 벡터 저장소 디렉토리
+            use_structure_chunking: 구조 우선 청킹 사용 여부
         """
         logger.info("RAG 파이프라인 초기화 중...")
         
         # 각 모듈 초기화
-        self.chunker = DocumentChunker()
+        self.use_structure_chunking = use_structure_chunking
+        if use_structure_chunking:
+            logger.info("구조 우선 청킹 활성화")
+            self.chunker = StructureAwareChunker()
+        else:
+            logger.info("일반 청킹 사용")
+            self.chunker = DocumentChunker()
+        
         self.embedder = DocumentEmbedder()
         self.llm = LLMGenerator()
+        self.table_processor = TableProcessor(extracted_dir=config.EXTRACTED_DIR)
         
         # Reranker 초기화 (옵션)
         if config.USE_RERANKER:
@@ -142,10 +154,15 @@ class RAGPipeline:
             metadata['summary'] = ""
         
         # 청킹
-        if tables:
-            chunks = self.chunker.chunk_with_tables(text, tables, metadata)
+        if self.use_structure_chunking:
+            # 구조 우선 청킹
+            chunks = self.chunker.chunk_by_structure(text, metadata)
         else:
-            chunks = self.chunker.chunk_text(text, metadata)
+            # 일반 청킹
+            if tables:
+                chunks = self.chunker.chunk_with_tables(text, tables, metadata)
+            else:
+                chunks = self.chunker.chunk_text(text, metadata)
         
         # 임베딩
         embeddings = self.embedder.embed_documents(chunks)
@@ -258,10 +275,19 @@ class RAGPipeline:
                 'score': score
             })
         
-        # 4. 답변 생성
-        result = self.llm.generate_with_sources(contexts, question)
+        # 4. 답변 생성 (표 참조 포함)
+        result = self.llm.generate_with_sources(contexts, question, include_tables=True)
         
-        # 5. 결과 반환
+        # 5. 표 참조 후처리
+        tables_data = []
+        if result.get('tables'):
+            logger.info(f"표 참조 처리 중: {len(result['tables'])}개")
+            tables_data = self.table_processor.extract_tables_from_contexts(
+                contexts, 
+                format='both'  # HTML과 Markdown 모두 생성
+            )
+        
+        # 6. 결과 반환
         response = {
             "answer": result['answer'],
             "question": question,
@@ -270,6 +296,7 @@ class RAGPipeline:
         
         if return_sources:
             response["sources"] = result['sources']
+            response["tables"] = tables_data  # 표 데이터 추가
         
         logger.info(f"질문 처리 완료 ({response['processing_time']:.2f}초)")
         return response

@@ -69,12 +69,23 @@ class AnswerSource(BaseModel):
     article_title: Optional[str] = Field(None, description="조 제목")
     hierarchy_path: Optional[str] = Field(None, description="계층 경로")
     score: float = Field(..., description="유사도 점수 (0-1)")
+    table_id: Optional[str] = Field(None, description="표 ID (표가 포함된 경우)")
+
+
+class TableData(BaseModel):
+    """표 데이터"""
+    table_id: str = Field(..., description="표 ID")
+    doc_name: str = Field(..., description="문서명")
+    location: str = Field(..., description="표 위치 (계층 경로)")
+    html: Optional[str] = Field(None, description="HTML 형식 표")
+    markdown: Optional[str] = Field(None, description="Markdown 형식 표")
 
 
 class QueryResponse(BaseModel):
     """질의응답 응답"""
     answer: str = Field(..., description="생성된 답변")
     sources: List[AnswerSource] = Field(..., description="출처 정보")
+    tables: List[TableData] = Field(default_factory=list, description="참조된 표 데이터")
     processing_time: float = Field(..., description="처리 시간 (초)")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
 

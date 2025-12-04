@@ -241,15 +241,41 @@ def format_answer_sources(sources: list) -> list:
     for idx, source in enumerate(sources, 1):
         formatted_source = {
             "index": idx,
-            "doc_name": source.get("metadata", {}).get("doc_name", "Unknown"),
-            "chapter_number": source.get("metadata", {}).get("chapter_number"),
-            "chapter_title": source.get("metadata", {}).get("chapter_title"),
-            "article_number": source.get("metadata", {}).get("article_number"),
-            "article_title": source.get("metadata", {}).get("article_title"),
-            "hierarchy_path": source.get("metadata", {}).get("hierarchy_path"),
-            "score": source.get("score", 0.0)
+            "doc_name": source.get("doc_name", "Unknown"),
+            "chapter_number": source.get("chapter_number"),
+            "chapter_title": source.get("chapter_title"),
+            "article_number": source.get("article_number"),
+            "article_title": source.get("article_title"),
+            "hierarchy_path": source.get("hierarchy_path"),
+            "score": source.get("score", 0.0),
+            "table_id": source.get("table_id")
         }
         formatted_sources.append(formatted_source)
     
     return formatted_sources
+
+
+def format_table_data(tables: list) -> list:
+    """
+    표 데이터를 응답 형식으로 변환
+    
+    Args:
+        tables: 표 데이터 리스트
+        
+    Returns:
+        포맷팅된 표 데이터 리스트
+    """
+    formatted_tables = []
+    
+    for table in tables:
+        formatted_table = {
+            "table_id": table.get("table_id", ""),
+            "doc_name": table.get("doc_name", "Unknown"),
+            "location": table.get("location", ""),
+            "html": table.get("html", ""),
+            "markdown": table.get("markdown", "")
+        }
+        formatted_tables.append(formatted_table)
+    
+    return formatted_tables
 

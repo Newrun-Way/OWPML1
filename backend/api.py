@@ -282,15 +282,18 @@ async def query(request: QueryRequest):
         
         # 3. 응답 포맷팅
         sources = utils.format_answer_sources(result.get('sources', []))
+        tables = utils.format_table_data(result.get('tables', []))
         
         return QueryResponse(
             answer=result.get('answer', '답변을 생성할 수 없습니다.'),
             sources=sources,
+            tables=tables,
             processing_time=processing_time,
             metadata={
                 "question": request.question,
                 "filters": filters,
-                "source_count": len(sources)
+                "source_count": len(sources),
+                "table_count": len(tables)
             }
         )
         

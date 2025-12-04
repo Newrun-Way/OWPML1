@@ -188,34 +188,49 @@ class LLMGenerator:
     def generate_with_sources(
         self,
         contexts: List[Dict],
-        question: str
+        question: str,
+        include_tables: bool = True
     ) -> Dict[str, any]:
         """
-        출처 정보를 포함한 답변 생성
+        출처 정보를 포함한 답변 생성 (표 참조 처리 포함)
         
         Args:
             contexts: 검색된 문서 리스트 [{"content": str, "metadata": dict, "score": float}, ...]
             question: 사용자 질문
+            include_tables: 표 참조 처리 여부
         
         Returns:
             {
                 "answer": str,
                 "sources": List[Dict],
+                "tables": List[Dict],  # 표 정보 (table_id가 있는 경우)
                 "context_used": str
             }
         """
         # 컨텍스트 포맷팅
         context_parts = []
+        table_refs = []  # 표 참조 정보 수집
+        
         for i, ctx in enumerate(contexts):
             content = ctx['content']
             metadata = ctx.get('metadata', {})
             doc_name = metadata.get('doc_name', '알 수 없음')
             hierarchy_path = metadata.get('hierarchy_path', '')
+            table_id = metadata.get('table_id')
             
             # 구조 정보가 있으면 포함
             doc_header = f"[문서 {i+1}: {doc_name}]"
             if hierarchy_path:
                 doc_header += f"\n[위치: {hierarchy_path}]"
+            
+            # 표 참조 정보 수집
+            if include_tables and table_id and table_id not in ['null', '', None]:
+                table_refs.append({
+                    'table_id': table_id,
+                    'doc_name': doc_name,
+                    'hierarchy_path': hierarchy_path
+                })
+                doc_header += f"\n[참고: 이 섹션에는 표({table_id})가 포함되어 있습니다]"
             
             context_parts.append(f"{doc_header}\n{content}")
         
@@ -242,6 +257,8 @@ class LLMGenerator:
                 'article_number': metadata.get('article_number', ''),
                 'article_title': metadata.get('article_title', ''),
                 'hierarchy_path': metadata.get('hierarchy_path', ''),
+                # 표 참조 정보
+                'table_id': metadata.get('table_id', ''),
                 # 사용자/프로젝트 정보 (향후 프론트엔드에서 입력)
                 'user_id': metadata.get('user_id', ''),
                 'dept_id': metadata.get('dept_id', ''),
@@ -252,6 +269,7 @@ class LLMGenerator:
         return {
             'answer': answer,
             'sources': sources,
+            'tables': table_refs,  # 표 참조 정보
             'context_used': context_str
         }
 
