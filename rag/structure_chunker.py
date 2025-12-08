@@ -6,6 +6,7 @@
 import re
 from typing import List, Dict, Tuple
 from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from loguru import logger
 import config
 
@@ -36,6 +37,14 @@ class StructureAwareChunker:
             'paragraph': re.compile(r'^([①②③④⑤⑥⑦⑧⑨⑩]|\d+\))\s*(.*)$', re.MULTILINE),
             'subparagraph': re.compile(r'^([가나다라마바사아자차카타파하])\.\s+(.*)$', re.MULTILINE)
         }
+        
+        # 일반 청킹용 text splitter (fallback용)
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=max_chunk_size,
+            chunk_overlap=overlap_size,
+            separators=["\n\n", "\n", ".", "!", "?", " ", ""],
+            length_function=len
+        )
         
         logger.info(f"StructureAwareChunker 초기화: max={max_chunk_size}, min={min_chunk_size}")
     
@@ -149,6 +158,7 @@ class StructureAwareChunker:
         2. 조가 max_chunk_size보다 크면 항(Paragraph) 단위로 분할
         3. 항도 크면 일반 청킹 적용
         4. 조가 min_chunk_size보다 작으면 다음 조와 병합
+        5. 구조가 없으면 일반 청킹으로 fallback
         
         Args:
             text: 입력 텍스트
@@ -166,6 +176,11 @@ class StructureAwareChunker:
         # 조(Article) 단위로 청킹
         chunks = []
         article_sections = [s for s in sections if s["type"] == "article"]
+        
+        # 구조가 없으면 일반 청킹으로 fallback
+        if not article_sections:
+            logger.warning(f"문서 구조를 찾을 수 없습니다. 일반 청킹으로 전환합니다.")
+            return self._fallback_to_general_chunking(text, metadata)
         
         i = 0
         while i < len(article_sections):
@@ -370,6 +385,44 @@ class StructureAwareChunker:
             overlapped_chunks.append(overlapped_chunk)
         
         return overlapped_chunks
+    
+    def _fallback_to_general_chunking(
+        self,
+        text: str,
+        metadata: Dict
+    ) -> List[Document]:
+        """
+        구조가 없는 문서에 대한 일반 청킹 fallback
+        
+        Args:
+            text: 입력 텍스트
+            metadata: 메타데이터
+        
+        Returns:
+            Document 리스트
+        """
+        logger.info("일반 청킹 적용 중...")
+        
+        # RecursiveCharacterTextSplitter로 청킹
+        chunks = self.text_splitter.create_documents(
+            texts=[text],
+            metadatas=[metadata]
+        )
+        
+        # 청크 인덱스 추가
+        for i, chunk in enumerate(chunks):
+            chunk.metadata['chunk_index'] = i
+            chunk.metadata['chunk_size'] = len(chunk.page_content)
+            # 구조 정보는 비어있음
+            chunk.metadata['chapter_number'] = ""
+            chunk.metadata['chapter_title'] = ""
+            chunk.metadata['article_number'] = ""
+            chunk.metadata['article_title'] = ""
+            chunk.metadata['hierarchy_path'] = ""
+            chunk.metadata['chunking_strategy'] = 'general'  # 일반 청킹임을 표시
+        
+        logger.info(f"일반 청킹 완료: {len(chunks)}개 청크")
+        return chunks
 
 
 def test_structure_chunker():
