@@ -44,6 +44,8 @@ ENV/
 # 개인 작업 기록
 회고록/
 docs/
+!docs/청킹_시스템_통합_가이드.md
+!docs/RAG_성능_평가_가이드.md
 
 # RAG 시스템 데이터
 data/
