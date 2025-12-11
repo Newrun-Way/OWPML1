@@ -1,194 +1,211 @@
 """
-커스텀 질문 리스트로 RAGAS 평가
-사용자가 직접 작성한 질문 파일로 평가
+커스텀 질문 리스트를 파일에서 읽어 RAGAS 평가하는 스크립트
 """
 
-import json
+import os
 import sys
+import json
+import time
+import argparse
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# 프로젝트 루트 경로 추가
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from rag.pipeline import RAGPipeline
-from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy
 from datasets import Dataset
-import time
+from ragas import evaluate
+from ragas.metrics import (
+    faithfulness,
+    answer_relevancy,
+)
 
-def evaluate_custom_questions(questions_file: str = None):
+# 환경 변수 로드
+from dotenv import load_dotenv
+load_dotenv()
+
+
+def load_questions_from_file(file_path: str):
     """
-    커스텀 질문 파일로 평가
+    JSON 파일에서 질문 리스트 로드
     
-    질문 파일 형식:
+    파일 형식:
     [
-        {"question": "감사규칙의 목적은?", "ground_truth": "감사 업무를 규정함"},
-        {"question": "계약서에 뭐가 필요해?", "ground_truth": "계약 당사자, 금액 등"}
+        {
+            "question": "질문 내용",
+            "ground_truth": "정답 (선택사항)"
+        },
+        ...
     ]
     """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        questions = json.load(f)
     
-    # 질문 파일 입력
-    if not questions_file:
-        questions_file = input("질문 파일 경로를 입력하세요 (예: my_questions.json): ").strip()
+    return questions
+
+
+def evaluate_custom_questions(questions_file: str, output_file: str = None):
+    """커스텀 질문 리스트로 RAGAS 평가"""
     
-    questions_file = Path(questions_file)
-    
-    if not questions_file.exists():
-        print(f"❌ 파일을 찾을 수 없습니다: {questions_file}")
-        print("\n질문 파일 생성 예시:")
-        print("""
-[
-  {
-    "question": "감사규칙의 목적은 무엇인가요?",
-    "ground_truth": "감사 업무를 규정하고 독립성을 확보하기 위함"
-  },
-  {
-    "question": "계약서에 필수로 포함되어야 할 항목은?",
-    "ground_truth": "계약 당사자, 목적, 금액, 기간 등"
-  }
-]
-        """)
-        return
+    print("="*80)
+    print("  📋 커스텀 질문 리스트 RAGAS 평가")
+    print("="*80)
+    print()
     
     # 질문 로드
+    print(f"📂 질문 파일 로딩: {questions_file}")
     try:
-        with open(questions_file, 'r', encoding='utf-8') as f:
-            custom_questions = json.load(f)
-    except Exception as e:
-        print(f"❌ 파일 읽기 실패: {e}")
+        questions_data = load_questions_from_file(questions_file)
+        print(f"✅ {len(questions_data)}개의 질문을 로드했습니다.\n")
+    except FileNotFoundError:
+        print(f"❌ 파일을 찾을 수 없습니다: {questions_file}")
+        return
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON 파싱 오류: {e}")
         return
     
-    print(f"\n✅ {len(custom_questions)}개 질문 로드 완료")
-    
     # RAG 파이프라인 초기화
-    print("\nRAG 파이프라인 초기화 중...")
-    pipeline = RAGPipeline(load_existing=True)
-    print("✅ 준비 완료\n")
+    print("📦 RAG 파이프라인 초기화 중...")
+    try:
+        pipeline = RAGPipeline()
+        print("✅ 파이프라인 로드 완료\n")
+    except Exception as e:
+        print(f"❌ 파이프라인 로드 실패: {e}")
+        return
     
-    # 질의 및 평가 데이터 수집
-    questions = []
-    answers = []
-    contexts_list = []
-    ground_truths = []
-    response_times = []
+    # 각 질문에 대해 RAG 시스템 실행
+    results_data = {
+        "question": [],
+        "answer": [],
+        "contexts": [],
+        "ground_truth": [],
+    }
     
-    print("="*70)
-    print("질의 실행 중...")
-    print("="*70)
+    print("="*80)
+    print("🔍 RAG 시스템으로 답변 생성 중...")
+    print("="*80)
+    print()
     
-    for i, item in enumerate(custom_questions, 1):
-        question = item.get("question", "")
-        ground_truth = item.get("ground_truth", "정답 미제공")
+    for i, item in enumerate(questions_data, 1):
+        question = item['question']
+        ground_truth = item.get('ground_truth', '')
         
-        print(f"\n[{i}/{len(custom_questions)}] {question}")
+        print(f"[{i}/{len(questions_data)}] {question}")
         
-        # RAG 질의
-        start_time = time.time()
-        result = pipeline.query(question, top_k=5)
-        elapsed = time.time() - start_time
-        
-        answer = result.get("answer", "")
-        sources = result.get("sources", [])
-        
-        print(f"  답변: {answer[:100]}...")
-        print(f"  응답 시간: {elapsed:.2f}초")
-        
-        # 데이터 저장
-        questions.append(question)
-        answers.append(answer)
-        ground_truths.append([ground_truth])
-        response_times.append(elapsed)
-        
-        contexts = [src['content'] for src in sources if src.get('content')]
-        contexts_list.append(contexts if contexts else ["정보 없음"])
+        try:
+            start_time = time.time()
+            result = pipeline.query(question, top_k=5)
+            elapsed_time = time.time() - start_time
+            
+            answer = result.get('answer', '')
+            contexts = [doc.page_content for doc in result.get('source_documents', [])]
+            
+            results_data['question'].append(question)
+            results_data['answer'].append(answer)
+            results_data['contexts'].append(contexts)
+            results_data['ground_truth'].append(ground_truth)
+            
+            print(f"  ✅ 완료 ({elapsed_time:.2f}초)")
+            print(f"  답변: {answer[:100]}...")
+            print()
+            
+        except Exception as e:
+            print(f"  ❌ 실패: {e}\n")
+            # 실패한 경우 빈 값으로 채우기
+            results_data['question'].append(question)
+            results_data['answer'].append("")
+            results_data['contexts'].append([])
+            results_data['ground_truth'].append(ground_truth)
     
     # RAGAS 평가
-    print("\n\n" + "="*70)
-    print("RAGAS 평가 실행 중...")
-    print("="*70)
-    
-    data = {
-        "question": questions,
-        "contexts": contexts_list,
-        "answer": answers,
-        "ground_truths": ground_truths
-    }
-    dataset = Dataset.from_dict(data)
+    print("="*80)
+    print("⚖️  RAGAS 평가 실행 중...")
+    print("="*80)
+    print()
     
     try:
-        result = evaluate(
-            dataset,
-            metrics=[faithfulness, answer_relevancy]
-        )
+        dataset = Dataset.from_dict(results_data)
+        
+        # 평가 지표
+        metrics = [faithfulness, answer_relevancy]
+        
+        # 평가 실행
+        evaluation_results = evaluate(dataset, metrics=metrics)
         
         # 결과 출력
-        print("\n" + "="*70)
-        print("RAGAS 평가 결과")
-        print("="*70)
+        print("="*80)
+        print("  📊 RAGAS 평가 결과")
+        print("="*80)
+        print()
         
-        print(f"\n총 질문: {len(questions)}개")
+        for metric_name, score in evaluation_results.items():
+            if metric_name.startswith('_'):
+                continue
+            
+            if score >= 0.8:
+                emoji = "✅"
+                status = "우수"
+            elif score >= 0.6:
+                emoji = "⚠️"
+                status = "보통"
+            else:
+                emoji = "❌"
+                status = "개선 필요"
+            
+            print(f"{metric_name:25s}: {score:.3f}  {emoji} {status}")
         
-        # 응답 시간
-        avg_time = sum(response_times) / len(response_times)
-        print(f"\n응답 속도:")
-        print(f"  평균: {avg_time:.2f}초")
-        print(f"  최소: {min(response_times):.2f}초")
-        print(f"  최대: {max(response_times):.2f}초")
-        
-        # RAGAS 지표
-        print(f"\nRAGAS 지표:")
-        faithfulness_score = result.get('faithfulness', 0)
-        relevancy_score = result.get('answer_relevancy', 0)
-        
-        print(f"  Faithfulness (신뢰성):     {faithfulness_score:.3f}")
-        print(f"  Answer Relevancy (관련성): {relevancy_score:.3f}")
-        
-        avg_score = (faithfulness_score + relevancy_score) / 2
-        print(f"  평균 점수:                  {avg_score:.3f}")
-        
-        # 판정
-        print("\n판정:")
-        if avg_score >= 0.85:
-            print("  ✅ 우수 - 프로덕션 준비 완료")
-        elif avg_score >= 0.70:
-            print("  ⚠️ 보통 - 개선 권장")
-        else:
-            print("  ❌ 개선 필요 - 시스템 점검 필요")
+        print()
+        print("="*80)
         
         # 결과 저장
-        output_file = questions_file.parent / f"{questions_file.stem}_result.json"
-        result_data = {
-            "evaluation_time": sum(response_times),
-            "avg_response_time": avg_time,
-            "faithfulness": faithfulness_score,
-            "answer_relevancy": relevancy_score,
-            "average_score": avg_score,
-            "details": [
-                {
-                    "question": q,
-                    "answer": a,
-                    "ground_truth": gt[0],
-                    "response_time": rt
-                }
-                for q, a, gt, rt in zip(questions, answers, ground_truths, response_times)
-            ]
-        }
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(result_data, f, ensure_ascii=False, indent=2)
-        
-        print(f"\n결과 저장: {output_file}")
-        print("="*70)
+        if output_file:
+            output_data = {
+                "evaluation_results": dict(evaluation_results),
+                "details": []
+            }
+            
+            for i in range(len(results_data['question'])):
+                output_data['details'].append({
+                    "question": results_data['question'][i],
+                    "answer": results_data['answer'][i],
+                    "ground_truth": results_data['ground_truth'][i],
+                    "contexts": results_data['contexts'][i]
+                })
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(output_data, f, ensure_ascii=False, indent=2)
+            
+            print(f"\n💾 결과가 저장되었습니다: {output_file}")
         
     except Exception as e:
-        print(f"\n❌ RAGAS 평가 실패: {e}")
+        print(f"❌ RAGAS 평가 실패: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="커스텀 질문 리스트로 RAGAS 평가"
+    )
+    parser.add_argument(
+        "--file",
+        type=str,
+        default="my_questions.json",
+        help="질문이 담긴 JSON 파일 경로"
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="평가 결과를 저장할 파일 경로 (선택사항)"
+    )
+    
+    args = parser.parse_args()
+    
+    evaluate_custom_questions(args.file, args.output)
 
 
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="커스텀 질문으로 RAGAS 평가")
-    parser.add_argument("--file", help="질문 파일 경로 (JSON)")
-    
-    args = parser.parse_args()
-    evaluate_custom_questions(args.file)
-
+    main()
 

@@ -1,467 +1,282 @@
 """
-RAGAS 기반 RAG 시스템 평가
+RAGAS 기반 RAG 시스템 평가 테스트
 """
 
+import os
+import sys
 import json
 import time
+import pytest
 from pathlib import Path
-from typing import List, Dict
-import numpy as np
-from loguru import logger
 
-# 프로젝트 경로 추가
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 프로젝트 루트 경로 추가
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from rag.pipeline import RAGPipeline
+from datasets import Dataset
+from ragas import evaluate
+from ragas.metrics import (
+    faithfulness,
+    answer_relevancy,
+)
 
-# RAGAS 관련 임포트
-try:
-    from ragas import evaluate
-    from ragas.metrics import (
-        faithfulness,          # 답변이 문서에 충실한가? (환각 방지)
-        answer_relevancy,      # 답변이 질문과 관련있는가?
-        context_precision,     # 검색된 문서 순위가 정확한가?
-        context_recall,        # 필요한 정보를 모두 검색했는가?
-        answer_correctness,    # 답변이 정답과 일치하는가?
-    )
-    from datasets import Dataset
-    RAGAS_AVAILABLE = True
-except ImportError:
-    RAGAS_AVAILABLE = False
-    logger.warning("RAGAS가 설치되지 않았습니다. pip install ragas datasets 실행 필요")
+# 환경 변수 로드
+from dotenv import load_dotenv
+load_dotenv()
 
 
-class RAGASEvaluator:
-    """RAGAS 기반 RAG 평가 클래스"""
+class TestRAGASEvaluation:
+    """RAGAS 평가 테스트 클래스"""
     
-    def __init__(self, test_cases_path: str = "tests/test_cases.json"):
-        """
-        Args:
-            test_cases_path: 테스트 케이스 JSON 파일 경로
-        """
-        if not RAGAS_AVAILABLE:
-            raise ImportError("RAGAS를 설치해주세요: pip install ragas datasets")
-        
-        self.test_cases = self._load_test_cases(test_cases_path)
-        self.pipeline = RAGPipeline(use_structure_chunking=True)
-        
-        logger.info(f"RAGAS 평가 초기화: {len(self.test_cases)}개 테스트 케이스")
+    @pytest.fixture(scope="class")
+    def pipeline(self):
+        """RAG 파이프라인 fixture"""
+        return RAGPipeline()
     
-    def _load_test_cases(self, path: str) -> List[Dict]:
+    @pytest.fixture
+    def test_cases(self):
         """테스트 케이스 로드"""
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            logger.warning(f"테스트 케이스 파일 없음: {path}, 기본 케이스 사용")
-            return self._get_default_test_cases()
-    
-    def _get_default_test_cases(self) -> List[Dict]:
-        """기본 테스트 케이스"""
-        return [
-            {
-                "id": "test_001",
-                "question": "급여는 언제 지급되나요?",
-                "ground_truth": "급여는 매월 25일에 지급하며, 지급일이 토요일 또는 공휴일인 경우 그 전일에 지급한다."
-            },
-            {
-                "id": "test_002",
-                "question": "과장의 기본급은 얼마인가요?",
-                "ground_truth": "과장의 기본급은 3,500,000원이다."
-            },
-            {
-                "id": "test_003",
-                "question": "제3장에서 다루는 내용은 무엇인가요?",
-                "ground_truth": "제3장에서는 급여 및 수당에 관한 내용을 다룬다."
-            },
-            {
-                "id": "test_004",
-                "question": "직책수당은 누구에게 지급되나요?",
-                "ground_truth": "직책수당은 과장급 이상 직원에게 지급된다."
-            },
-            {
-                "id": "test_005",
-                "question": "야간근무수당은 시간당 얼마인가요?",
-                "ground_truth": "야간근무수당은 22시 이후 근무 시 시간당 15,000원이다."
-            }
-        ]
-    
-    def prepare_ragas_dataset(self, measure_response_time: bool = True) -> Dict:
-        """
-        RAGAS 평가를 위한 데이터셋 준비
+        test_cases_file = project_root / "tests" / "test_cases_real.json"
         
-        Returns:
-            {
-                "question": [...],
-                "contexts": [[...], ...],
-                "answer": [...],
-                "ground_truths": [[...], ...]
-            }
-        """
-        logger.info("RAGAS 데이터셋 준비 중...")
+        if not test_cases_file.exists():
+            pytest.skip("테스트 케이스 파일이 없습니다.")
         
-        questions = []
-        contexts_list = []
-        answers = []
-        ground_truths = []
+        with open(test_cases_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    
+    def test_simple_mode(self, pipeline, test_cases):
+        """
+        간단 모드: Faithfulness, Answer Relevancy, Response Time만 평가
+        """
+        print("\n" + "="*80)
+        print("  📊 RAGAS 평가 - 간단 모드")
+        print("="*80)
+        
+        # 첫 3개 질문만 테스트
+        sample_cases = test_cases[:3]
+        
+        results_data = {
+            "question": [],
+            "answer": [],
+            "contexts": [],
+            "ground_truth": [],
+        }
+        
         response_times = []
         
-        for i, case in enumerate(self.test_cases):
-            logger.info(f"  [{i+1}/{len(self.test_cases)}] {case['question']}")
+        for item in sample_cases:
+            question = item['question']
+            ground_truth = item.get('ground_truth', '')
             
-            # RAG 파이프라인 질의 (응답 시간 측정)
-            if measure_response_time:
+            print(f"\n질문: {question}")
+            
+            start_time = time.time()
+            result = pipeline.query(question, top_k=5)
+            elapsed_time = time.time() - start_time
+            response_times.append(elapsed_time)
+            
+            answer = result.get('answer', '')
+            contexts = [doc.page_content for doc in result.get('source_documents', [])]
+            
+            results_data['question'].append(question)
+            results_data['answer'].append(answer)
+            results_data['contexts'].append(contexts)
+            results_data['ground_truth'].append(ground_truth)
+            
+            print(f"답변: {answer[:100]}...")
+            print(f"응답 시간: {elapsed_time:.2f}초")
+        
+        # RAGAS 평가
+        dataset = Dataset.from_dict(results_data)
+        metrics = [faithfulness, answer_relevancy]
+        
+        evaluation_results = evaluate(dataset, metrics=metrics)
+        
+        # 결과 출력
+        print("\n" + "="*80)
+        print("  평가 결과")
+        print("="*80)
+        
+        for metric_name, score in evaluation_results.items():
+            if not metric_name.startswith('_'):
+                print(f"{metric_name:25s}: {score:.3f}")
+        
+        avg_response_time = sum(response_times) / len(response_times)
+        print(f"{'평균 응답 시간':25s}: {avg_response_time:.2f}초")
+        
+        # Assertion
+        assert evaluation_results['faithfulness'] > 0.5, "Faithfulness가 너무 낮습니다"
+        assert evaluation_results['answer_relevancy'] > 0.5, "Answer Relevancy가 너무 낮습니다"
+        assert avg_response_time < 5.0, "응답 시간이 너무 깁니다"
+    
+    def test_full_evaluation(self, pipeline, test_cases):
+        """
+        전체 평가: 모든 테스트 케이스에 대해 평가
+        """
+        print("\n" + "="*80)
+        print("  📊 RAGAS 평가 - 전체 모드")
+        print("="*80)
+        
+        results_data = {
+            "question": [],
+            "answer": [],
+            "contexts": [],
+            "ground_truth": [],
+        }
+        
+        response_times = []
+        
+        for i, item in enumerate(test_cases, 1):
+            question = item['question']
+            ground_truth = item.get('ground_truth', '')
+            
+            print(f"\n[{i}/{len(test_cases)}] {question}")
+            
+            try:
                 start_time = time.time()
-                result = self.pipeline.query(case["question"], top_k=5)
-                elapsed = time.time() - start_time
-                response_times.append(elapsed)
-            else:
-                result = self.pipeline.query(case["question"], top_k=5)
-            
-            # 데이터 수집
-            questions.append(case["question"])
-            answers.append(result.get("answer", ""))
-            ground_truths.append([case.get("ground_truth", "")])
-            
-            # 검색된 문서들 (contexts)
-            contexts = []
-            for source in result.get("sources", []):
-                content = source.get("content", "")
-                if content:
-                    contexts.append(content)
-            contexts_list.append(contexts if contexts else ["정보 없음"])
+                result = pipeline.query(question, top_k=5)
+                elapsed_time = time.time() - start_time
+                response_times.append(elapsed_time)
+                
+                answer = result.get('answer', '')
+                contexts = [doc.page_content for doc in result.get('source_documents', [])]
+                
+                results_data['question'].append(question)
+                results_data['answer'].append(answer)
+                results_data['contexts'].append(contexts)
+                results_data['ground_truth'].append(ground_truth)
+                
+                print(f"  ✅ 완료 ({elapsed_time:.2f}초)")
+                
+            except Exception as e:
+                print(f"  ❌ 실패: {e}")
+                results_data['question'].append(question)
+                results_data['answer'].append("")
+                results_data['contexts'].append([])
+                results_data['ground_truth'].append(ground_truth)
         
-        logger.info("데이터셋 준비 완료")
+        # RAGAS 평가
+        dataset = Dataset.from_dict(results_data)
+        metrics = [faithfulness, answer_relevancy]
         
-        result = {
-            "question": questions,
-            "contexts": contexts_list,
-            "answer": answers,
-            "ground_truths": ground_truths
-        }
+        evaluation_results = evaluate(dataset, metrics=metrics)
         
-        if measure_response_time:
-            result["response_times"] = response_times
+        # 결과 출력
+        print("\n" + "="*80)
+        print("  전체 평가 결과")
+        print("="*80)
         
-        return result
+        for metric_name, score in evaluation_results.items():
+            if not metric_name.startswith('_'):
+                emoji = "✅" if score >= 0.7 else "⚠️" if score >= 0.5 else "❌"
+                print(f"{metric_name:25s}: {score:.3f}  {emoji}")
+        
+        if response_times:
+            avg_response_time = sum(response_times) / len(response_times)
+            print(f"{'평균 응답 시간':25s}: {avg_response_time:.2f}초")
+        
+        # 결과 저장
+        output_file = project_root / "tests" / "ragas_results.json"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                "evaluation_results": dict(evaluation_results),
+                "avg_response_time": avg_response_time if response_times else None,
+                "total_questions": len(test_cases),
+                "successful_queries": len(response_times)
+            }, f, ensure_ascii=False, indent=2)
+        
+        print(f"\n💾 결과 저장: {output_file}")
+        
+        # Assertion
+        assert evaluation_results['faithfulness'] > 0.6, "전체 Faithfulness가 낮습니다"
+        assert evaluation_results['answer_relevancy'] > 0.6, "전체 Answer Relevancy가 낮습니다"
     
-    def evaluate(
-        self,
-        metrics: List = None,
-        save_results: bool = True,
-        include_response_time: bool = True
-    ) -> Dict:
+    def test_compare_modes(self, pipeline):
         """
-        RAGAS 평가 실행
-        
-        Args:
-            metrics: 평가 지표 리스트 (None이면 answer_relevancy만 사용)
-            save_results: 결과 저장 여부
-            include_response_time: 응답 속도 측정 포함 여부
-        
-        Returns:
-            평가 결과
+        비교 모드: 구조 청킹 vs 일반 청킹 비교
         """
-        # 기본 지표 설정 (신뢰성 + 관련성)
-        if metrics is None:
-            metrics = [
-                faithfulness,      # 신뢰성 (환각 방지)
-                answer_relevancy,  # 답변 관련성
-            ]
+        print("\n" + "="*80)
+        print("  📊 RAGAS 평가 - 비교 모드")
+        print("="*80)
         
-        self.include_response_time = include_response_time
-        
-        logger.info("=== RAGAS 평가 시작 ===")
-        logger.info(f"평가 지표: {[m.name for m in metrics]}")
-        
-        # 데이터셋 준비
-        data = self.prepare_ragas_dataset(measure_response_time=include_response_time)
-        
-        # 응답 시간 저장 (RAGAS 데이터셋에서 제외)
-        response_times = data.pop("response_times", None)
-        
-        dataset = Dataset.from_dict(data)
-        
-        # RAGAS 평가 실행
-        logger.info("\nRAGAS 평가 실행 중... (시간이 걸릴 수 있습니다)")
-        start_time = time.time()
-        
-        try:
-            result = evaluate(dataset, metrics=metrics)
-            evaluation_time = time.time() - start_time
-            
-            logger.info(f"평가 완료 (소요 시간: {evaluation_time:.1f}초)")
-            
-            # 결과 정리
-            scores = {
-                "evaluation_time": evaluation_time,
-                "test_count": len(self.test_cases),
-                "metrics": {}
+        # 샘플 질문
+        sample_questions = [
+            {
+                "question": "감사는 누구에게 보고하나요?",
+                "ground_truth": "감사는 대표이사 또는 이사회에 직접 보고합니다."
+            },
+            {
+                "question": "계약 체결 시 전결권자는 누구인가요?",
+                "ground_truth": "계약 금액과 유형에 따라 위임전결규칙에서 정한 직급의 담당자가 전결권자입니다."
             }
-            
-            # 지표별 점수 추출
-            for metric in metrics:
-                metric_name = metric.name
-                if metric_name in result:
-                    scores["metrics"][metric_name] = float(result[metric_name])
-            
-            # 응답 시간 통계 추가
-            if response_times:
-                scores["response_time"] = {
-                    "average": float(np.mean(response_times)),
-                    "min": float(np.min(response_times)),
-                    "max": float(np.max(response_times)),
-                    "median": float(np.median(response_times)),
-                    "per_query": response_times
-                }
-            
-            # 평균 점수 계산
-            if scores["metrics"]:
-                scores["average_score"] = np.mean(list(scores["metrics"].values()))
-            
-            # 결과 출력
-            self._print_results(scores)
-            
-            # 결과 저장
-            if save_results:
-                self._save_results(scores, data)
-            
-            return scores
-            
-        except Exception as e:
-            logger.error(f"RAGAS 평가 실패: {e}")
-            raise
-    
-    def _print_results(self, scores: Dict):
-        """결과 출력"""
-        print("\n" + "="*70)
-        print("RAGAS 평가 결과")
-        print("="*70)
-        print(f"\n총 테스트: {scores['test_count']}개")
-        print(f"평가 시간: {scores['evaluation_time']:.1f}초")
+        ]
         
-        # 응답 시간 출력
-        if "response_time" in scores:
-            rt = scores["response_time"]
-            print(f"\n응답 속도:")
-            print("-"*70)
-            print(f"  {'평균 응답 시간':25s}: {rt['average']:.2f}초")
-            print(f"  {'최소 응답 시간':25s}: {rt['min']:.2f}초")
-            print(f"  {'최대 응답 시간':25s}: {rt['max']:.2f}초")
-            print(f"  {'중앙값':25s}: {rt['median']:.2f}초")
-            
-            # 응답 시간 판정
-            avg_time = rt['average']
-            if avg_time < 2.0:
-                time_status = "✅ 우수"
-            elif avg_time < 3.0:
-                time_status = "⚠️ 보통"
-            else:
-                time_status = "❌ 개선 필요"
-            print(f"  {'판정':25s}: {time_status}")
+        # 구조 청킹으로 평가
+        print("\n--- 구조 청킹 평가 ---")
+        structure_results = self._evaluate_with_mode(pipeline, sample_questions, use_structure=True)
         
-        print(f"\n평가 지표:")
-        print("-"*70)
-        
-        for metric_name, score in scores["metrics"].items():
-            # 지표별 판정
-            if score >= 0.85:
-                status = "✅ 우수"
-            elif score >= 0.70:
-                status = "⚠️ 보통"
-            else:
-                status = "❌ 개선 필요"
-            
-            print(f"  {metric_name:25s}: {score:.3f}  {status}")
-        
-        if "average_score" in scores:
-            print("-"*70)
-            print(f"  {'평균 점수':25s}: {scores['average_score']:.3f}")
-        
-        print("="*70)
-        
-        # 해석 가이드
-        print("\n[지표 해석 가이드]")
-        print("  • Faithfulness (신뢰성):      답변이 문서에 충실한가? (환각 방지)")
-        print("  • Answer Relevancy (관련성):  답변이 질문과 관련있는가?")
-        print("  • Context Precision (정밀도): 검색된 문서의 순위가 정확한가?")
-        print("  • Context Recall (재현율):    필요한 모든 정보를 검색했는가?")
-        print("  • Answer Correctness (정확도): 답변이 정답과 일치하는가?")
-        
-        print("\n[판정 기준]")
-        print("  ✅ 우수 (0.85+):    프로덕션 준비 완료")
-        print("  ⚠️ 보통 (0.70-0.85): 파라미터 튜닝 권장")
-        print("  ❌ 개선 필요 (<0.70): 시스템 개선 필요")
-    
-    def _save_results(self, scores: Dict, raw_data: Dict):
-        """결과 저장"""
-        output_path = Path("tests/ragas_evaluation_results.json")
-        
-        results = {
-            "summary": scores,
-            "raw_data": {
-                "questions": raw_data["question"],
-                "answers": raw_data["answer"],
-                "ground_truths": raw_data["ground_truths"],
-                "contexts_count": [len(ctx) for ctx in raw_data["contexts"]]
-            }
-        }
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"\n결과 저장: {output_path}")
-    
-    def compare_chunking_strategies(self) -> Dict:
-        """
-        구조 청킹 vs 일반 청킹 비교
-        
-        Returns:
-            비교 결과
-        """
-        logger.info("\n=== 청킹 전략 비교 평가 ===")
-        
-        results = {}
-        
-        # 1. 구조 우선 청킹
-        logger.info("\n[1/2] 구조 우선 청킹 평가")
-        self.pipeline = RAGPipeline(use_structure_chunking=True)
-        results["structure_chunking"] = self.evaluate(save_results=False)
-        
-        # 2. 일반 청킹
-        logger.info("\n[2/2] 일반 청킹 평가")
-        self.pipeline = RAGPipeline(use_structure_chunking=False)
-        results["general_chunking"] = self.evaluate(save_results=False)
+        # 일반 청킹으로 평가 (비교를 위해 파이프라인 재생성)
+        print("\n--- 일반 청킹 평가 ---")
+        pipeline_general = RAGPipeline(use_structure_chunking=False)
+        general_results = self._evaluate_with_mode(pipeline_general, sample_questions, use_structure=False)
         
         # 비교 출력
-        self._print_comparison(results)
+        print("\n" + "="*80)
+        print("  비교 결과")
+        print("="*80)
+        print(f"{'지표':25s} | {'구조 청킹':>12s} | {'일반 청킹':>12s} | {'차이':>10s}")
+        print("-" * 80)
         
-        # 비교 결과 저장
-        output_path = Path("tests/chunking_comparison.json")
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-        logger.info(f"\n비교 결과 저장: {output_path}")
+        for metric in ['faithfulness', 'answer_relevancy']:
+            if metric in structure_results and metric in general_results:
+                struct_score = structure_results[metric]
+                general_score = general_results[metric]
+                diff = struct_score - general_score
+                diff_str = f"+{diff:.3f}" if diff > 0 else f"{diff:.3f}"
+                
+                print(f"{metric:25s} | {struct_score:12.3f} | {general_score:12.3f} | {diff_str:>10s}")
         
-        return results
+        # Assertion
+        assert structure_results['faithfulness'] >= general_results['faithfulness'], \
+            "구조 청킹이 일반 청킹보다 Faithfulness가 낮습니다"
     
-    def _print_comparison(self, results: Dict):
-        """비교 결과 출력"""
-        print("\n" + "="*70)
-        print("청킹 전략 비교 결과")
-        print("="*70)
+    def _evaluate_with_mode(self, pipeline, questions, use_structure=True):
+        """특정 모드로 평가 실행"""
+        results_data = {
+            "question": [],
+            "answer": [],
+            "contexts": [],
+            "ground_truth": [],
+        }
         
-        structure = results["structure_chunking"]["metrics"]
-        general = results["general_chunking"]["metrics"]
-        
-        print(f"\n{'지표':25s} {'구조 청킹':>12s} {'일반 청킹':>12s} {'차이':>12s}")
-        print("-"*70)
-        
-        for metric in structure.keys():
-            s_score = structure[metric]
-            g_score = general[metric]
-            diff = s_score - g_score
+        for item in questions:
+            question = item['question']
+            ground_truth = item.get('ground_truth', '')
             
-            diff_str = f"+{diff:.3f}" if diff > 0 else f"{diff:.3f}"
-            winner = "🏆" if diff > 0 else ""
+            result = pipeline.query(question, top_k=5)
+            answer = result.get('answer', '')
+            contexts = [doc.page_content for doc in result.get('source_documents', [])]
             
-            print(f"{metric:25s} {s_score:>12.3f} {g_score:>12.3f} {diff_str:>12s} {winner}")
+            results_data['question'].append(question)
+            results_data['answer'].append(answer)
+            results_data['contexts'].append(contexts)
+            results_data['ground_truth'].append(ground_truth)
         
-        print("-"*70)
+        dataset = Dataset.from_dict(results_data)
+        metrics = [faithfulness, answer_relevancy]
         
-        s_avg = results["structure_chunking"].get("average_score", 0)
-        g_avg = results["general_chunking"].get("average_score", 0)
-        avg_diff = s_avg - g_avg
-        
-        print(f"{'평균':25s} {s_avg:>12.3f} {g_avg:>12.3f} {avg_diff:+12.3f}")
-        print("="*70)
-        
-        # 결론
-        print("\n[결론]")
-        if avg_diff > 0.05:
-            print(f"✅ 구조 우선 청킹이 {avg_diff:.3f}점 더 우수합니다!")
-        elif avg_diff < -0.05:
-            print(f"⚠️ 일반 청킹이 {abs(avg_diff):.3f}점 더 우수합니다.")
-        else:
-            print("두 전략의 성능이 비슷합니다.")
+        return evaluate(dataset, metrics=metrics)
 
 
-def main():
-    """메인 실행"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="RAGAS RAG 평가")
-    parser.add_argument(
-        "--mode",
-        choices=["evaluate", "compare", "simple"],
-        default="evaluate",
-        help="평가 모드: evaluate (전체 평가), compare (청킹 비교), simple (관련성+속도만)"
-    )
-    parser.add_argument(
-        "--test-cases",
-        default="tests/test_cases.json",
-        help="테스트 케이스 JSON 파일 경로"
-    )
-    parser.add_argument(
-        "--metrics",
-        nargs="+",
-        choices=["faithfulness", "answer_relevancy", "context_precision", "context_recall", "answer_correctness"],
-        help="평가할 지표 선택 (미지정 시 answer_relevancy만)"
-    )
-    parser.add_argument(
-        "--no-response-time",
-        action="store_true",
-        help="응답 시간 측정 제외"
-    )
-    
-    args = parser.parse_args()
-    
-    try:
-        evaluator = RAGASEvaluator(test_cases_path=args.test_cases)
-        
-        # 지표 선택
-        selected_metrics = None
-        if args.metrics:
-            metric_map = {
-                "faithfulness": faithfulness,
-                "answer_relevancy": answer_relevancy,
-                "context_precision": context_precision,
-                "context_recall": context_recall,
-                "answer_correctness": answer_correctness
-            }
-            selected_metrics = [metric_map[m] for m in args.metrics]
-        
-        if args.mode == "simple":
-            # 간단한 평가 (신뢰성 + 관련성 + 응답 속도)
-            print("\n[간단한 평가 모드: 신뢰성 + 관련성 + 응답 속도]\n")
-            evaluator.evaluate(
-                metrics=[faithfulness, answer_relevancy],
-                include_response_time=True
-            )
-        elif args.mode == "evaluate":
-            # 기본 평가
-            evaluator.evaluate(
-                metrics=selected_metrics,
-                include_response_time=not args.no_response_time
-            )
-        else:
-            # 청킹 전략 비교
-            evaluator.compare_chunking_strategies()
-            
-    except ImportError as e:
-        print(f"\n❌ 오류: {e}")
-        print("\n설치 명령어:")
-        print("  pip install ragas datasets")
-        return 1
-    except Exception as e:
-        print(f"\n❌ 평가 실패: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
-    
-    return 0
+def test_ragas_metrics_available():
+    """RAGAS 메트릭이 제대로 로드되는지 확인"""
+    assert faithfulness is not None
+    assert answer_relevancy is not None
+    print("\n✅ RAGAS 메트릭이 정상적으로 로드되었습니다.")
 
 
 if __name__ == "__main__":
-    exit(main())
+    # pytest 실행
+    pytest.main([__file__, "-v", "-s"])
 
